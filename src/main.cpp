@@ -4,6 +4,8 @@
 #include <memory>
 #include <string>
 #include "AST.h"
+//#include "koopa.h"
+
 
 using namespace std;
 
@@ -14,6 +16,7 @@ using namespace std;
 // 看起来会很烦人, 于是干脆采用这种看起来 dirty 但实际很有效的手段
 extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
+FILE *out_file;
 
 int main(int argc, const char *argv[]) {
   // 解析命令行参数. 测试脚本/评测平台要求你的编译器能接收如下参数:
@@ -32,7 +35,15 @@ int main(int argc, const char *argv[]) {
   auto ret = yyparse(ast);
   assert(!ret);
 
-  // 输出解析得到的 AST, 其实就是个字符串
+  // 输出解析得到的 AST
   ast->Dump();
+
+  out_file = fopen(output, "w+");
+  assert(out_file);
+  string out_str="";
+  ast->printIR(out_str);
+  fprintf(out_file,out_str.c_str());
+  fclose(out_file);
+
   return 0;
 }

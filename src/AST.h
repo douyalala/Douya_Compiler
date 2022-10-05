@@ -2,12 +2,16 @@
 
 #include <iostream>
 
+static int count_block = 0;
+
 // 所有 AST 的基类
 class BaseAST {
  public:
   virtual ~BaseAST() = default;
 
   virtual void Dump() const = 0;
+
+  virtual void printIR(std::string &out) const = 0;  
 };
 
 // CompUnit
@@ -19,6 +23,10 @@ class CompUnitAST : public BaseAST {
     std::cout << "CompUnitAST { ";
     func_def->Dump();
     std::cout << " }" << std::endl;
+  }
+
+  void printIR(std::string &out) const override {
+    func_def->printIR(out);
   }
 };
 
@@ -36,6 +44,16 @@ class FuncDefAST : public BaseAST {
     block->Dump();
     std::cout << " }";
   }
+
+  void printIR(std::string &out) const override {
+    out += "fun @";
+    out += ident;
+    out += "():";
+    func_type->printIR(out);
+    out += "{\n";
+    block->printIR(out);
+    out += " } ";
+  }
 };
 
 // FuncType
@@ -43,8 +61,12 @@ class FuncTypeAST : public BaseAST {
   public:
  //level 1:只是个int，没什么用
 
- void Dump() const override {
+  void Dump() const override {
     std::cout << "FuncTypeAST { int }";
+  }
+
+  void printIR(std::string &out) const override {
+    out += " i32 ";
   }
 };
 
@@ -58,6 +80,14 @@ class BlockAST : public BaseAST {
     stmt->Dump();
     std::cout << " }";
   }
+
+  void printIR(std::string &out) const override {
+    out += "%";
+    out += std::to_string(count_block);
+    out += ":\n";
+    count_block++;
+    stmt->printIR(out);
+  }
 };
 
 // Stmt
@@ -69,5 +99,11 @@ class StmtAST : public BaseAST {
     std::cout << "StmtAST { ";
     std::cout << number;
     std::cout << " }";
+  }
+
+  void printIR(std::string &out) const override {
+    out += "ret ";
+    out += std::to_string(number);
+    out += "\n";
   }
 };
