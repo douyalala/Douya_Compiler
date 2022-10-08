@@ -39,6 +39,9 @@ int main(int argc, const char *argv[])
   auto parse_ret = yyparse(ast);
   assert(!parse_ret);
 
+  // //Dump输出调试
+  // ast->Dump();
+
   // AST 转换为 字符串 IR 
   string IRstring = "";
   ast->printIR(IRstring);
@@ -50,6 +53,7 @@ int main(int argc, const char *argv[])
     assert(out_file);
     fprintf(out_file,"%s", IRstr);
     fclose(out_file);
+    return 0;
   }
 
   // 解析字符串 str, 得到 Koopa IR 程序
@@ -69,6 +73,7 @@ int main(int argc, const char *argv[])
     freopen(output, "w+" , stdout);
   }
   Visit(raw);
+  
 
   // 处理完成, 释放 raw program builder 占用的内存
   // 注意, raw program 中所有的指针指向的内存均为 raw program builder 的内存
