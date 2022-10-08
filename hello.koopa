@@ -1,10 +1,30 @@
 .text
 .globl main
 main:
-li t0, 6
+li t0, 3
 xor t1, x0, t0
 seqz t1, t1
-sub t2, x0, t1
-sub t3, x0, t2
-li a0, t3
+xor t0, t1, x0
+snez t0, t0
+li t0, 4
+xor t1, t0, x0
+snez t1, t1
+or t0, t0, t1
+li t0, 2
+mul t1, t0, t0
+li t0, 1
+add t2, t0, t1
+li t0, 5
+slt t1, t2, t0
+li t0, 6
+xor t2, t1, t0
+snez t2, t2
+li t0, 7
+sub t1, x0, t0
+xor t0, t2, x0
+snez t0, t0
+xor t0, t1, x0
+snez t0, t0
+and t0, t0, t0
+mv a0, t0
 ret

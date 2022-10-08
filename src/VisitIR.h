@@ -47,6 +47,19 @@ string Find_reg()
     return "out_of_limit_reg";
 }
 
+// 释放一个寄存器，让它重新变成可用
+void Free_reg(string reg)
+{
+    if (reg[0] == 'a')
+    {
+        a[(reg[1] - '0')] = 0;
+    }
+    else
+    {
+        t[(reg[1] - '0')] = 0;
+    }
+}
+
 // 访问 raw program
 void Visit(const koopa_raw_program_t &program)
 {
@@ -164,10 +177,15 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
     /// Return value, null if no return value.
     // koopa_raw_value_t value;
 
+    // 这个里面用到的寄存器也是用完就删，寄存器太珍贵了呜呜
+
     if (mem_map.count(retInst.value))
     {
-        cout << "li a0, " << mem_map.find(retInst.value)->second;
+        string ret_val = mem_map.find(retInst.value)->second;
+        cout << "mv a0, " << mem_map.find(retInst.value)->second;
         cout << "\nret\n";
+        Free_reg(mem_map.find(retInst.value)->second);
+        mem_map.erase(retInst.value);
     }
     else
     {
@@ -178,8 +196,10 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
         }
         else
         {
-            cout << "li a0, " << mem_map.find(retInst.value)->second;
+            cout << "mv a0, " << mem_map.find(retInst.value)->second;
             cout << "\nret\n";
+            Free_reg(mem_map.find(retInst.value)->second);
+            mem_map.erase(retInst.value);
         }
     }
 }
@@ -242,25 +262,53 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
 
     switch (binaryInst.op)
     {
-    // case KOOPA_RBO_NOT_EQ: cout<<" "; break;
+    case KOOPA_RBO_NOT_EQ:
+        //先把俩东西按位异或（xor），然后看看不是0（seqz）
+        cout << "xor " << reg << ", " << left_val << ", " << right_val << "\n";
+        cout << "snez " << reg << ", " << reg << "\n";
+        break;
     case KOOPA_RBO_EQ:
-        //需要先把俩东西按位异或（xor），然后看看是0吗（seqz）
+        //先把俩东西按位异或（xor），然后看看是0吗（seqz）
         cout << "xor " << reg << ", " << left_val << ", " << right_val << "\n";
         cout << "seqz " << reg << ", " << reg << "\n";
         break;
-    // case KOOPA_RBO_GT: cout << "sgt "; break;
-    // case KOOPA_RBO_LT: cout << "slt "; break;
-    // case KOOPA_RBO_GE: cout<<" "; break;
-    // case KOOPA_RBO_LE: cout<<" "; break;
-    // case KOOPA_RBO_ADD: cout << "add "; break;
+    case KOOPA_RBO_GT:
+        cout << "sgt " << reg << ", " << left_val << ", " << right_val << "\n";
+        break;
+    case KOOPA_RBO_LT:
+        cout << "slt " << reg << ", " << left_val << ", " << right_val << "\n";
+        break;
+    case KOOPA_RBO_GE:
+        //就是不小于：先比一下第一个是不是小于第二个，在取一个逻辑not（和0是否一样）
+        cout << "slt " << reg << ", " << left_val << ", " << right_val << "\n";
+        cout << "seqz " << reg << ", " << reg << "\n";
+        break;
+    case KOOPA_RBO_LE:
+        //同上，就是不大于
+        cout << "sgt " << reg << ", " << left_val << ", " << right_val << "\n";
+        cout << "seqz " << reg << ", " << reg << "\n";
+        break;
+    case KOOPA_RBO_ADD:
+        cout << "add " << reg << ", " << left_val << ", " << right_val << "\n";
+        break;
     case KOOPA_RBO_SUB:
         cout << "sub " << reg << ", " << left_val << ", " << right_val << "\n";
         break;
-    // case KOOPA_RBO_MUL: cout << "mul "; break;
-    // case KOOPA_RBO_DIV: cout << "div "; break;
-    // case KOOPA_RBO_MOD: cout << "rem "; break;
-    // case KOOPA_RBO_AND: cout << "and "; break;
-    // case KOOPA_RBO_OR: cout << "or "; break;
+    case KOOPA_RBO_MUL:
+        cout << "mul " << reg << ", " << left_val << ", " << right_val << "\n";
+        break;
+    case KOOPA_RBO_DIV:
+        cout << "div " << reg << ", " << left_val << ", " << right_val << "\n";
+        break;
+    case KOOPA_RBO_MOD:
+        cout << "rem " << reg << ", " << left_val << ", " << right_val << "\n";
+        break;
+    case KOOPA_RBO_AND:
+        cout << "and " << reg << ", " << left_val << ", " << right_val << "\n";
+        break;
+    case KOOPA_RBO_OR:
+        cout << "or " << reg << ", " << left_val << ", " << right_val << "\n";
+        break;
     // case KOOPA_RBO_XOR: cout << "xor "; break;
     // case KOOPA_RBO_SHL: cout << "sll "; break;
     // case KOOPA_RBO_SHR: cout << "srl "; break;
@@ -271,6 +319,12 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
     }
 
     mem_map.insert(make_pair(super_value, reg));
+
+    //删掉左右值，不让他们占着寄存器
+    Free_reg(left_val);
+    Free_reg(right_val);
+    mem_map.erase(binaryInst.lhs);
+    mem_map.erase(binaryInst.rhs);
 }
 
 // 访问 raw slice

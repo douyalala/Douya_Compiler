@@ -37,12 +37,12 @@ using namespace std;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN
+%token INT RETURN LE GE EQ NE LAND LOR
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Block Stmt Exp PrimaryExp UnaryExp
+%type <ast_val> FuncDef FuncType Block Stmt Exp PrimaryExp UnaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp
 %type <int_val> Number
 %type <str_val> UnaryOp
 
@@ -89,8 +89,18 @@ Stmt
 
 Exp 
   : UnaryExp {
-    auto ast = new ExpAST();
+    auto ast = new ExpAST_1();
     ast->unary_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  };
+  | AddExp {
+    auto ast = new ExpAST_2();
+    ast->add_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  };
+  | LOrExp {
+    auto ast = new ExpAST_3();
+    ast->lor_exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   };
 
@@ -138,6 +148,136 @@ UnaryOp
     $$ = &u_op;
   };
 
+MulExp
+  : UnaryExp{
+    auto ast = new MulExpAST_1();
+    ast->unary_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  };
+  | MulExp '*' UnaryExp{
+    auto ast = new MulExpAST_2();
+    ast->mul_exp = unique_ptr<BaseAST>($1);
+    ast->binary_op = "*";
+    ast->unary_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
+  | MulExp '/' UnaryExp{
+    auto ast = new MulExpAST_2();
+    ast->mul_exp = unique_ptr<BaseAST>($1);
+    ast->binary_op = "/";
+    ast->unary_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
+  | MulExp '%' UnaryExp{
+    auto ast = new MulExpAST_2();
+    ast->mul_exp = unique_ptr<BaseAST>($1);
+    ast->binary_op = "%";
+    ast->unary_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
+
+AddExp
+  : MulExp{
+    auto ast = new AddExpAST_1();
+    ast->mul_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  };
+  | AddExp '+' MulExp{
+    auto ast = new AddExpAST_2();
+    ast->add_exp = unique_ptr<BaseAST>($1);
+    ast->binary_op = "+";
+    ast->mul_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
+  | AddExp '-' MulExp{
+    auto ast = new AddExpAST_2();
+    ast->add_exp = unique_ptr<BaseAST>($1);
+    ast->binary_op = "-";
+    ast->mul_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
+
+RelExp
+  : AddExp{
+    auto ast = new RelExpAST_1();
+    ast->add_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  };
+  | RelExp '<' AddExp{
+    auto ast = new RelExpAST_2();
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    ast->cmp_op = "<";
+    ast->add_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
+  | RelExp '>' AddExp{
+    auto ast = new RelExpAST_2();
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    ast->cmp_op = ">";
+    ast->add_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
+  | RelExp LE AddExp{
+    auto ast = new RelExpAST_2();
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    ast->cmp_op = "<=";
+    ast->add_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
+  | RelExp GE AddExp{
+    auto ast = new RelExpAST_2();
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    ast->cmp_op = ">=";
+    ast->add_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
+
+EqExp
+  : RelExp{
+    auto ast = new EqExpAST_1();
+    ast->rel_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  };
+  | EqExp EQ RelExp{
+    auto ast = new EqExpAST_2();
+    ast->eq_exp = unique_ptr<BaseAST>($1);
+    ast->eq_op = "==";
+    ast->rel_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
+  | EqExp NE RelExp{
+    auto ast = new EqExpAST_2();
+    ast->eq_exp = unique_ptr<BaseAST>($1);
+    ast->eq_op = "!=";
+    ast->rel_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
+
+LAndExp
+  : EqExp{
+    auto ast = new LAndExpAST_1();
+    ast->eq_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  };
+  | LAndExp LAND EqExp{
+    auto ast = new LAndExpAST_2();
+    ast->land_exp = unique_ptr<BaseAST>($1);
+    ast->eq_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
+
+LOrExp
+  : LAndExp{
+    auto ast = new LOrExpAST_1();
+    ast->land_exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  };
+  | LOrExp LOR LAndExp{
+    auto ast = new LOrExpAST_2();
+    ast->lor_exp = unique_ptr<BaseAST>($1);
+    ast->land_exp = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  };
 
 %%
 

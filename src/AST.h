@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+using namespace std;
+
 static int count_block = 0;
 static int count_var = 0;
 /**
@@ -18,25 +20,25 @@ public:
   int val;
   virtual ~BaseAST() = default;
 
-  virtual void Dump() const = 0;
+  virtual void Dump() const = 0; // 输出调试用
 
-  virtual void printIR(std::string &out) = 0;
+  virtual void printIR(string &out) = 0; // 生成中间代码
 };
 
 // CompUnit
 class CompUnitAST : public BaseAST
 {
 public:
-  std::unique_ptr<BaseAST> func_def;
+  unique_ptr<BaseAST> func_def;
 
   void Dump() const override
   {
-    std::cout << "CompUnitAST { ";
+    cout << "CompUnitAST { ";
     func_def->Dump();
-    std::cout << " }" << std::endl;
+    cout << " }" << endl;
   }
 
-  void printIR(std::string &out) override
+  void printIR(string &out) override
   {
     func_def->printIR(out);
   }
@@ -46,20 +48,20 @@ public:
 class FuncDefAST : public BaseAST
 {
 public:
-  std::unique_ptr<BaseAST> func_type;
-  std::string ident;
-  std::unique_ptr<BaseAST> block;
+  unique_ptr<BaseAST> func_type;
+  string ident;
+  unique_ptr<BaseAST> block;
 
   void Dump() const override
   {
-    std::cout << "FuncDefAST { ";
+    cout << "FuncDefAST { ";
     func_type->Dump();
-    std::cout << ", " << ident << ", ";
+    cout << ", " << ident << ", ";
     block->Dump();
-    std::cout << " }";
+    cout << " }";
   }
 
-  void printIR(std::string &out) override
+  void printIR(string &out) override
   {
     out += "fun @";
     out += ident;
@@ -79,10 +81,10 @@ public:
 
   void Dump() const override
   {
-    std::cout << "FuncTypeAST { int }";
+    cout << "FuncTypeAST { int }";
   }
 
-  void printIR(std::string &out) override
+  void printIR(string &out) override
   {
     out += " i32 ";
   }
@@ -92,19 +94,19 @@ public:
 class BlockAST : public BaseAST
 {
 public:
-  std::unique_ptr<BaseAST> stmt;
+  unique_ptr<BaseAST> stmt;
 
   void Dump() const override
   {
-    std::cout << "BlockAST { ";
+    cout << "BlockAST { ";
     stmt->Dump();
-    std::cout << " }";
+    cout << " }";
   }
 
-  void printIR(std::string &out) override
+  void printIR(string &out) override
   {
     out += "%block_";
-    out += std::to_string(count_block);
+    out += to_string(count_block);
     out += ":\n";
     count_block++;
     stmt->printIR(out);
@@ -115,44 +117,44 @@ public:
 class StmtAST : public BaseAST
 {
 public:
-  std::unique_ptr<BaseAST> exp;
+  unique_ptr<BaseAST> exp;
 
   void Dump() const override
   {
-    std::cout << "StmtAST { ";
+    cout << "StmtAST { ";
     exp->Dump();
-    std::cout << " }";
+    cout << " }";
   }
 
-  void printIR(std::string &out) override
+  void printIR(string &out) override
   {
     exp->printIR(out);
     if (exp->name == -1)
     {
       out += "ret ";
-      out += (std::to_string(exp->val)).c_str();
+      out += (to_string(exp->val)).c_str();
       out += "\n";
     }
     else
     {
       out += "ret %";
-      out += (std::to_string(exp->name)).c_str();
+      out += (to_string(exp->name)).c_str();
       out += "\n";
     }
   }
 };
 
 // Exp - unary_exp
-class ExpAST : public BaseAST
+class ExpAST_1 : public BaseAST
 {
 public:
-  std::unique_ptr<BaseAST> unary_exp;
+  unique_ptr<BaseAST> unary_exp;
 
   void Dump() const override
   {
     unary_exp->Dump();
   }
-  void printIR(std::string &out) override
+  void printIR(string &out) override
   {
     unary_exp->printIR(out);
     if (unary_exp->name == -1)
@@ -167,19 +169,69 @@ public:
   }
 };
 
+// Exp - add_exp
+class ExpAST_2 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> add_exp;
+
+  void Dump() const override
+  {
+    add_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    add_exp->printIR(out);
+    if (add_exp->name == -1)
+    {
+      name = -1;
+      val = add_exp->val;
+    }
+    else
+    {
+      name = add_exp->name;
+    }
+  }
+};
+
+// Exp - lor_exp
+class ExpAST_3 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> lor_exp;
+
+  void Dump() const override
+  {
+    lor_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    lor_exp->printIR(out);
+    if (lor_exp->name == -1)
+    {
+      name = -1;
+      val = lor_exp->val;
+    }
+    else
+    {
+      name = lor_exp->name;
+    }
+  }
+};
+
 // PrimaryExp - (exp)
 class PrimaryExpAST_1 : public BaseAST
 {
 public:
-  std::unique_ptr<BaseAST> exp;
+  unique_ptr<BaseAST> exp;
 
   void Dump() const override
   {
-    std::cout << "(";
+    cout << "(";
     exp->Dump();
-    std::cout << ")";
+    cout << ")";
   }
-  void printIR(std::string &out) override
+  void printIR(string &out) override
   {
     exp->printIR(out);
     if (exp->name == -1)
@@ -202,9 +254,9 @@ public:
 
   void Dump() const override
   {
-    std::cout<<number;
+    cout << number;
   }
-  void printIR(std::string &out) override
+  void printIR(string &out) override
   {
     name = -1;
     val = number;
@@ -215,13 +267,13 @@ public:
 class UnaryExpAST_1 : public BaseAST
 {
 public:
-  std::unique_ptr<BaseAST> primary_exp;
+  unique_ptr<BaseAST> primary_exp;
 
   void Dump() const override
   {
     primary_exp->Dump();
   }
-  void printIR(std::string &out) override
+  void printIR(string &out) override
   {
     primary_exp->printIR(out);
     if (primary_exp->name == -1)
@@ -240,15 +292,15 @@ public:
 class UnaryExpAST_2 : public BaseAST
 {
 public:
-  std::string unary_op;
-  std::unique_ptr<BaseAST> unary_exp;
+  string unary_op;
+  unique_ptr<BaseAST> unary_exp;
 
   void Dump() const override
   {
-    std::cout << unary_op;
+    cout << unary_op;
     unary_exp->Dump();
   }
-  void printIR(std::string &out) override
+  void printIR(string &out) override
   {
     unary_exp->printIR(out);
     switch (unary_op[0])
@@ -267,16 +319,16 @@ public:
     case '-':
       name = count_var;
       out += "%";
-      out += (std::to_string(count_var)).c_str();
+      out += (to_string(count_var)).c_str();
       out += " = sub 0, ";
       if (unary_exp->name == -1)
       {
-        out += (std::to_string(unary_exp->val)).c_str();
+        out += (to_string(unary_exp->val)).c_str();
       }
       else
       {
         out += "%";
-        out += (std::to_string(unary_exp->name)).c_str();
+        out += (to_string(unary_exp->name)).c_str();
       }
       out += "\n";
       count_var++;
@@ -284,16 +336,16 @@ public:
     case '!':
       name = count_var;
       out += "%";
-      out += (std::to_string(count_var)).c_str();
+      out += (to_string(count_var)).c_str();
       out += " = eq 0, ";
       if (unary_exp->name == -1)
       {
-        out += (std::to_string(unary_exp->val)).c_str();
+        out += (to_string(unary_exp->val)).c_str();
       }
       else
       {
         out += "%";
-        out += (std::to_string(unary_exp->name)).c_str();
+        out += (to_string(unary_exp->name)).c_str();
       }
       out += "\n";
       count_var++;
@@ -301,5 +353,549 @@ public:
     default:
       out += "UnaryExpAST_2_err\n";
     }
+  }
+};
+
+// MulExp - UnaryExp
+class MulExpAST_1 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> unary_exp;
+
+  void Dump() const override
+  {
+    unary_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    unary_exp->printIR(out);
+    if (unary_exp->name == -1)
+    {
+      name = -1;
+      val = unary_exp->val;
+    }
+    else
+    {
+      name = unary_exp->name;
+    }
+  }
+};
+
+// MulExp - mul_exp ("*" | "/" | "%") unary_exp;
+class MulExpAST_2 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> mul_exp;
+  string binary_op;
+  unique_ptr<BaseAST> unary_exp;
+
+  void Dump() const override
+  {
+    mul_exp->Dump();
+    cout << binary_op;
+    unary_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    mul_exp->printIR(out);
+    unary_exp->printIR(out);
+    name = count_var;
+    out += "%";
+    out += (to_string(count_var)).c_str();
+
+    switch (binary_op[0])
+    {
+    case '*':
+      out += " = mul ";
+      break;
+    case '/':
+      out += " = div ";
+      break;
+    case '%':
+      out += " = mod ";
+      break;
+    default:
+      break;
+    }
+
+    if (mul_exp->name == -1)
+    {
+      out += (to_string(mul_exp->val)).c_str();
+    }
+    else
+    {
+      out += "%";
+      out += (to_string(mul_exp->name)).c_str();
+    }
+    out += ", ";
+    if (unary_exp->name == -1)
+    {
+      out += (to_string(unary_exp->val)).c_str();
+    }
+    else
+    {
+      out += "%";
+      out += (to_string(unary_exp->name)).c_str();
+    }
+    out += "\n";
+    count_var++;
+  }
+};
+
+// AddExp - mul_exp
+class AddExpAST_1 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> mul_exp;
+
+  void Dump() const override
+  {
+    mul_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    mul_exp->printIR(out);
+    if (mul_exp->name == -1)
+    {
+      name = -1;
+      val = mul_exp->val;
+    }
+    else
+    {
+      name = mul_exp->name;
+    }
+  }
+};
+
+// AddExp - add_exp ("+" | "-") mul_exp;
+class AddExpAST_2 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> add_exp;
+  string binary_op;
+  unique_ptr<BaseAST> mul_exp;
+
+  void Dump() const override
+  {
+    add_exp->Dump();
+    cout << binary_op;
+    mul_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    add_exp->printIR(out);
+    mul_exp->printIR(out);
+    name = count_var;
+    out += "%";
+    out += (to_string(count_var)).c_str();
+
+    switch (binary_op[0])
+    {
+    case '+':
+      out += " = add ";
+      break;
+    case '-':
+      out += " = sub ";
+      break;
+    default:
+      break;
+    }
+
+    if (add_exp->name == -1)
+    {
+      out += (to_string(add_exp->val)).c_str();
+    }
+    else
+    {
+      out += "%";
+      out += (to_string(add_exp->name)).c_str();
+    }
+    out += ", ";
+    if (mul_exp->name == -1)
+    {
+      out += (to_string(mul_exp->val)).c_str();
+    }
+    else
+    {
+      out += "%";
+      out += (to_string(mul_exp->name)).c_str();
+    }
+    out += "\n";
+    count_var++;
+  }
+};
+
+// RelExp - add_exp
+class RelExpAST_1 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> add_exp;
+
+  void Dump() const override
+  {
+    add_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    add_exp->printIR(out);
+    if (add_exp->name == -1)
+    {
+      name = -1;
+      val = add_exp->val;
+    }
+    else
+    {
+      name = add_exp->name;
+    }
+  }
+};
+
+// RelExp - rel_exp ("<" | ">" | "<=" | ">=") add_exp
+class RelExpAST_2 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> rel_exp;
+  string cmp_op;
+  int type;
+  unique_ptr<BaseAST> add_exp;
+
+  void Dump() const override
+  {
+    rel_exp->Dump();
+    cout << cmp_op;
+    add_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    if (cmp_op.length() >= 2)
+    {
+      type = cmp_op[0] + cmp_op[1];
+    }
+    else
+    {
+      type = cmp_op[0];
+    }
+    rel_exp->printIR(out);
+    add_exp->printIR(out);
+    name = count_var;
+    out += "%";
+    out += (to_string(count_var)).c_str();
+
+    switch (type)
+    {
+    case '<':
+      out += " = lt ";
+      break;
+    case '>':
+      out += " = gt ";
+      break;
+    case '<' + '=':
+      out += " = le ";
+      break;
+    case '>' + '=':
+      out += " = ge ";
+      break;
+    default:
+      break;
+    }
+
+    if (rel_exp->name == -1)
+    {
+      out += (to_string(rel_exp->val)).c_str();
+    }
+    else
+    {
+      out += "%";
+      out += (to_string(rel_exp->name)).c_str();
+    }
+    out += ", ";
+    if (add_exp->name == -1)
+    {
+      out += (to_string(add_exp->val)).c_str();
+    }
+    else
+    {
+      out += "%";
+      out += (to_string(add_exp->name)).c_str();
+    }
+    out += "\n";
+    count_var++;
+  }
+};
+
+// EqExp - rel_exp
+class EqExpAST_1 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> rel_exp;
+
+  void Dump() const override
+  {
+    rel_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    rel_exp->printIR(out);
+    if (rel_exp->name == -1)
+    {
+      name = -1;
+      val = rel_exp->val;
+    }
+    else
+    {
+      name = rel_exp->name;
+    }
+  }
+};
+
+// EqExp - eq_exp ("==" | "!=") rel_exp
+class EqExpAST_2 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> eq_exp;
+  string eq_op;
+  unique_ptr<BaseAST> rel_exp;
+
+  void Dump() const override
+  {
+    eq_exp->Dump();
+    cout << eq_op;
+    rel_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    eq_exp->printIR(out);
+    rel_exp->printIR(out);
+    name = count_var;
+    out += "%";
+    out += (to_string(count_var)).c_str();
+
+    switch (eq_op[0])
+    {
+    case '=':
+      out += " = eq ";
+      break;
+    case '!':
+      out += " = ne ";
+      break;
+    default:
+      break;
+    }
+
+    if (eq_exp->name == -1)
+    {
+      out += (to_string(eq_exp->val)).c_str();
+    }
+    else
+    {
+      out += "%";
+      out += (to_string(eq_exp->name)).c_str();
+    }
+    out += ", ";
+    if (rel_exp->name == -1)
+    {
+      out += (to_string(rel_exp->val)).c_str();
+    }
+    else
+    {
+      out += "%";
+      out += (to_string(rel_exp->name)).c_str();
+    }
+    out += "\n";
+    count_var++;
+  }
+};
+
+// LAndExp - eq_exp
+class LAndExpAST_1 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> eq_exp;
+
+  void Dump() const override
+  {
+    eq_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    eq_exp->printIR(out);
+    if (eq_exp->name == -1)
+    {
+      name = -1;
+      val = eq_exp->val;
+    }
+    else
+    {
+      name = eq_exp->name;
+    }
+  }
+};
+
+// LAndExp - land_exp "&&" eq_exp
+class LAndExpAST_2 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> land_exp;
+  unique_ptr<BaseAST> eq_exp;
+
+  void Dump() const override
+  {
+    land_exp->Dump();
+    cout << "&&";
+    eq_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    // KoppaIR里面貌似只有按位与and，所以先让两边和0比一下一不一样（变成0或1）
+    land_exp->printIR(out);
+    eq_exp->printIR(out);
+
+    int tmp_name_1 = count_var;
+    out += "%";
+    out += (to_string(count_var)).c_str();
+
+    out += " = ne ";
+
+    if (land_exp->name == -1)
+    {
+      out += (to_string(land_exp->val)).c_str();
+    }
+    else
+    {
+      out += "%";
+      out += (to_string(land_exp->name)).c_str();
+    }
+    out += ", 0\n";
+    count_var++;
+
+    int tmp_name_2 = count_var;
+    out += "%";
+    out += (to_string(count_var)).c_str();
+
+    out += " = ne ";
+
+    if (eq_exp->name == -1)
+    {
+      out += (to_string(eq_exp->val)).c_str();
+    }
+    else
+    {
+      out += "%";
+      out += (to_string(eq_exp->name)).c_str();
+    }
+    out += ", 0\n";
+    count_var++;
+
+    name = count_var;
+    out += "%";
+    out += (to_string(count_var)).c_str();
+
+    out += " = and ";
+
+    out += "%";
+    out += (to_string(tmp_name_1)).c_str();
+    out += ", ";
+
+    out += "%";
+    out += (to_string(tmp_name_2)).c_str();
+    out += "\n";
+    count_var++;
+  }
+};
+
+// LOrExp - land_exp
+class LOrExpAST_1 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> land_exp;
+
+  void Dump() const override
+  {
+    land_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    land_exp->printIR(out);
+    if (land_exp->name == -1)
+    {
+      name = -1;
+      val = land_exp->val;
+    }
+    else
+    {
+      name = land_exp->name;
+    }
+  }
+};
+
+// LOrExp - lor_exp "||" land_exp
+class LOrExpAST_2 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> lor_exp;
+  unique_ptr<BaseAST> land_exp;
+
+  void Dump() const override
+  {
+    lor_exp->Dump();
+    cout << "||";
+    land_exp->Dump();
+  }
+  void printIR(string &out) override
+  {
+    // KoppaIR里面也只有按位或or，所以先让两边和0比一下一不一样（变成0或1）
+    lor_exp->printIR(out);
+    land_exp->printIR(out);
+
+    int tmp_name_1 = count_var;
+    out += "%";
+    out += (to_string(count_var)).c_str();
+
+    out += " = ne ";
+
+    if (lor_exp->name == -1)
+    {
+      out += (to_string(lor_exp->val)).c_str();
+    }
+    else
+    {
+      out += "%";
+      out += (to_string(lor_exp->name)).c_str();
+    }
+    out += ", 0\n";
+    count_var++;
+
+    int tmp_name_2 = count_var;
+    out += "%";
+    out += (to_string(count_var)).c_str();
+
+    out += " = ne ";
+
+    if (land_exp->name == -1)
+    {
+      out += (to_string(land_exp->val)).c_str();
+    }
+    else
+    {
+      out += "%";
+      out += (to_string(land_exp->name)).c_str();
+    }
+    out += ", 0\n";
+    count_var++;
+
+    name = count_var;
+    out += "%";
+    out += (to_string(count_var)).c_str();
+
+    out += " = or ";
+
+    out += "%";
+    out += (to_string(tmp_name_1)).c_str();
+    out += ", ";
+
+    out += "%";
+    out += (to_string(tmp_name_2)).c_str();
+    out += "\n";
+    count_var++;
   }
 };

@@ -40,7 +40,7 @@ int main(int argc, const char *argv[])
   assert(!parse_ret);
 
   // //Dump输出调试
-  // ast->Dump();
+  ast->Dump();
 
   // AST 转换为 字符串 IR 
   string IRstring = "";
