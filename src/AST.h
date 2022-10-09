@@ -103,18 +103,17 @@ public:
 class BlockAST : public BaseAST
 {
 public:
-  // vector<unique_ptr<BaseAST>> bock_items;
-  unique_ptr<BaseAST> stmt;
+  vector<unique_ptr<BaseAST>> *block_items;
 
   void Dump() const override
   {
     cout << "BlockAST { ";
-    // for (int i = 0; i < bock_items.size(); i++)
-    // {
-    //   bock_items[i]->Dump();
-    //   cout << "\n";
-    // }
-    stmt->Dump();
+    int size = block_items->size();
+    cout << "(has " << size << " item)";
+    for (int i = 0; i < size; i++)
+    {
+      block_items->at(i)->Dump();
+    }
     cout << " }";
   }
 
@@ -124,12 +123,10 @@ public:
     out += to_string(count_block);
     out += ":\n";
     count_block++;
-    // for (int i = 0; i < bock_items.size(); i++)
-    // {
-    //   bock_items[i]->printIR(out);
-    //   out += "\n";
-    // }
-    stmt->printIR(out);
+    for (int i = 0; i < block_items->size(); i++)
+    {
+      block_items->at(i)->printIR(out);
+    }
   }
 };
 
@@ -160,7 +157,7 @@ public:
 
   void Dump() const override
   {
-    cout << "StmtAST { ";
+    cout << "StmtAST { return ";
     exp->Dump();
     cout << " }";
   }
@@ -314,6 +311,7 @@ public:
   }
   void printIR(string &out) override
   {
+    l_val->printIR(out);
     assert(l_val->name == "#");
     name = l_val->name;
     val = l_val->val;
@@ -970,7 +968,9 @@ public:
 
   void Dump() const override
   {
+    cout << "DeclAST { ";
     const_decl->Dump();
+    cout << " }";
   }
 
   void printIR(string &out) override
@@ -993,16 +993,16 @@ class ConstDeclAST : public BaseAST
 {
 public:
   string b_type; // 目前只能是int
-  vector<unique_ptr<BaseAST>> const_defs;
+  vector<unique_ptr<BaseAST>> *const_defs;
 
   void Dump() const override
   {
     cout << "const " << b_type << " ";
-    for (int i = 0; i < const_defs.size(); i++)
+    for (int i = 0; i < const_defs->size(); i++)
     {
-      const_defs[i]->Dump();
-      if (i == const_defs.size() - 1)
-        cout << ";";
+      const_defs->at(i)->Dump();
+      if (i == const_defs->size() - 1)
+        cout << "; ";
       else
         cout << ",";
     }
@@ -1010,9 +1010,9 @@ public:
 
   void printIR(string &out) override
   {
-    for (int i = 0; i < const_defs.size(); i++)
+    for (int i = 0; i < const_defs->size(); i++)
     {
-      const_defs[i]->printIR(out);
+      const_defs->at(i)->printIR(out);
     }
   }
 };

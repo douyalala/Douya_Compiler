@@ -177,6 +177,14 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
     /// Return value, null if no return value.
     // koopa_raw_value_t value;
 
+    // 如果是常数，就li，否则mv
+
+    if(retInst.value->kind.tag==KOOPA_RVT_INTEGER){
+        cout << "li a0, " << retInst.value->kind.data.integer.value;
+        cout << "\nret\n";
+        return;
+    }
+
     // 这个里面用到的寄存器也是用完就删，寄存器太珍贵了呜呜
 
     if (mem_map.count(retInst.value))
@@ -210,7 +218,7 @@ void Visit(const koopa_raw_integer_t &intInst, const koopa_raw_value_t &super_va
     // koopa_raw_integer_t：
     /// Value of integer.
     // int32_t value;
-    if (super_value->kind.data.integer.value == 0)
+    if (intInst.value == 0)
         mem_map.insert(make_pair(super_value, "x0"));
     else
     {

@@ -1,3 +1,5 @@
-int main() {
-  return 1 + 2 * (!3 || 4) < 5 != 6 && -7;
+int main()
+{
+  const int a = 1+1;
+  return a;
 }

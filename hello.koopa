@@ -1,4 +1,5 @@
-fun @main(): i32 {
-%block_0:
-ret 1
- } 
+.text
+.globl main
+main:
+li a0, 2
+ret

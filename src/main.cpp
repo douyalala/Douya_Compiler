@@ -29,7 +29,7 @@ int main(int argc, const char *argv[])
   auto input = argv[2];
   auto output = argv[4];
 
-  std::cout<<mode<<"\n";
+  cout<<mode<<"\n";
 
   // 打开输入文件, 并且指定 lexer 在解析的时候读取这个文件
   yyin = fopen(input, "r");
@@ -41,7 +41,7 @@ int main(int argc, const char *argv[])
   assert(!parse_ret);
 
   // //Dump输出调试
-  ast->Dump();
+  // ast->Dump();
 
   // AST 转换为 字符串 IR 
   string IRstring = "";
