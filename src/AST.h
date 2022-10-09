@@ -103,7 +103,7 @@ public:
 class BlockAST : public BaseAST
 {
 public:
-  //vector<unique_ptr<BaseAST>> bock_items;
+  // vector<unique_ptr<BaseAST>> bock_items;
   unique_ptr<BaseAST> stmt;
 
   void Dump() const override
@@ -314,7 +314,9 @@ public:
   }
   void printIR(string &out) override
   {
+    assert(l_val->name == "#");
     name = l_val->name;
+    val = l_val->val;
   }
 };
 
@@ -358,41 +360,48 @@ public:
   void printIR(string &out) override
   {
     unary_exp->printIR(out);
-    switch (unary_op[0])
+
+    //计算能计算的常量
+    if (unary_exp->name == "#")
     {
-    case '+':
-      if (unary_exp->name == "#")
+      name = "#";
+      switch (unary_op[0])
       {
-        name = "#";
+      case '+':
         val = unary_exp->val;
+        break;
+      case '-':
+        val = 0 - (unary_exp->val);
+        break;
+      case '!':
+        val = !(unary_exp->val);
+        break;
       }
-      else
+    }
+    else
+    {
+      switch (unary_op[0])
       {
+      case '+':
         name = unary_exp->name;
+        break;
+      case '-':
+        name = "%" + to_string(count_var);
+        out += name.c_str();
+        out += " = sub 0, ";
+        out += (unary_exp->name).c_str();
+        out += "\n";
+        count_var++;
+        break;
+      case '!':
+        name = "%" + to_string(count_var);
+        out += name.c_str();
+        out += " = eq 0, ";
+        out += (unary_exp->name).c_str();
+        out += "\n";
+        count_var++;
+        break;
       }
-      break;
-    case '-':
-      name = "%" + to_string(count_var);
-      out += name.c_str();
-      out += " = sub 0, ";
-      if (unary_exp->name == "#")
-        out += (to_string(unary_exp->val)).c_str();
-      else
-        out += (unary_exp->name).c_str();
-      out += "\n";
-      count_var++;
-      break;
-    case '!':
-      name = "%" + to_string(count_var);
-      out += name.c_str();
-      out += " = eq 0, ";
-      if (unary_exp->name == "#")
-        out += (to_string(unary_exp->val)).c_str();
-      else
-        out += (unary_exp->name).c_str();
-      out += "\n";
-      count_var++;
-      break;
     }
   }
 };
@@ -440,6 +449,26 @@ public:
   {
     mul_exp->printIR(out);
     unary_exp->printIR(out);
+
+    //计算常量
+    if (mul_exp->name == "#" && unary_exp->name == "#")
+    {
+      name = "#";
+      switch (binary_op[0])
+      {
+      case '*':
+        val = (mul_exp->val) * (unary_exp->val);
+        break;
+      case '/':
+        val = (mul_exp->val) / (unary_exp->val);
+        break;
+      case '%':
+        val = (mul_exp->val) % (unary_exp->val);
+        break;
+      }
+      return;
+    }
+
     name = "%" + to_string(count_var);
     out += name.c_str();
 
@@ -513,6 +542,23 @@ public:
   {
     add_exp->printIR(out);
     mul_exp->printIR(out);
+
+    //计算常量
+    if (add_exp->name == "#" && mul_exp->name == "#")
+    {
+      name = "#";
+      switch (binary_op[0])
+      {
+      case '+':
+        val = (add_exp->val) + (mul_exp->val);
+        break;
+      case '-':
+        val = (add_exp->val) - (mul_exp->val);
+        break;
+      }
+      return;
+    }
+
     name = "%" + to_string(count_var);
     out += name.c_str();
 
@@ -582,6 +628,8 @@ public:
   }
   void printIR(string &out) override
   {
+
+    //准备工作，让后面的switch可以工作
     if (cmp_op.length() >= 2)
     {
       type = cmp_op[0] + cmp_op[1];
@@ -590,8 +638,32 @@ public:
     {
       type = cmp_op[0];
     }
+
     rel_exp->printIR(out);
     add_exp->printIR(out);
+
+    //计算常量
+    if (rel_exp->name == "#" && add_exp->name == "#")
+    {
+      name = "#";
+      switch (type)
+      {
+      case '<':
+        val = (rel_exp->val) < (add_exp->val);
+        break;
+      case '>':
+        val = (rel_exp->val) > (add_exp->val);
+        break;
+      case '<' + '=':
+        val = (rel_exp->val) <= (add_exp->val);
+        break;
+      case '>' + '=':
+        val = (rel_exp->val) >= (add_exp->val);
+        break;
+      }
+      return;
+    }
+
     name = "%" + to_string(count_var);
     out += name.c_str();
 
@@ -668,6 +740,23 @@ public:
   {
     eq_exp->printIR(out);
     rel_exp->printIR(out);
+
+    //计算常量
+    if (eq_exp->name == "#" && rel_exp->name == "#")
+    {
+      name = "#";
+      switch (eq_op[0])
+      {
+      case '=':
+        val = ((eq_exp->val) == (rel_exp->val));
+        break;
+      case '!':
+        val = ((eq_exp->val) != (rel_exp->val));
+        break;
+      }
+      return;
+    }
+
     name = "%" + to_string(count_var);
     out += name.c_str();
 
@@ -735,9 +824,18 @@ public:
   }
   void printIR(string &out) override
   {
-    // KoppaIR里面貌似只有按位与and，所以先让两边和0比一下一不一样（变成0或1）
     land_exp->printIR(out);
     eq_exp->printIR(out);
+
+    //计算常量
+    if (land_exp->name == "#" && eq_exp->name == "#")
+    {
+      name = "#";
+      val = ((land_exp->val) && (eq_exp->val));
+      return;
+    }
+
+    // KoppaIR里面貌似只有按位与and，所以先让两边和0比一下一不一样（变成0或1）
 
     string tmp_name_1 = "%" + to_string(count_var);
     out += tmp_name_1.c_str();
@@ -815,9 +913,18 @@ public:
   }
   void printIR(string &out) override
   {
-    // KoppaIR里面也只有按位或or，所以先让两边和0比一下一不一样（变成0或1）
     lor_exp->printIR(out);
     land_exp->printIR(out);
+
+    //计算常量
+    if (lor_exp->name == "#" && land_exp->name == "#")
+    {
+      name = "#";
+      val = ((lor_exp->val) || (land_exp->val));
+      return;
+    }
+
+    // KoppaIR里面也只有按位或or，所以先让两边和0比一下一不一样（变成0或1）
 
     string tmp_name_1 = "%" + to_string(count_var);
     out += tmp_name_1.c_str();
