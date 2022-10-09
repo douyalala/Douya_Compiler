@@ -80,6 +80,21 @@ Block
     $$ = ast;
   };
 
+// Decl          ::= ConstDecl;
+// ConstDecl     ::= "const" BType ConstDef {"," ConstDef} ";";
+// BType         ::= "int";
+// ConstDef      ::= IDENT "=" ConstInitVal;
+// ConstInitVal  ::= ConstExp;
+
+// Block         ::= "{" {BlockItem} "}";
+// BlockItem     ::= Decl | Stmt;
+
+// LVal          ::= IDENT;
+// PrimaryExp    ::= "(" Exp ")" | LVal | Number;
+
+// ConstExp      ::= Exp;
+
+
 Stmt 
   : RETURN Exp ';' {
     auto ast = new StmtAST();

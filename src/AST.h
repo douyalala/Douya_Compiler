@@ -1,22 +1,31 @@
 #pragma once
 
 #include <iostream>
+#include <string>
+#include <cstring>
+#include <vector>
+#include <assert.h>
+#include <map>
 
 using namespace std;
 
 static int count_block = 0;
-static int count_var = 0;
 /**
  * count_var给我新建的变量计数并命名
  *  - 相应的非终结符AST中包含自己的名字var_n就是用这个命名
  *  - 如果那个符号不需要名字，比如是个常数，那var_n = -1
  */
+static int count_var = 0;
+/**
+ * 记录常量的map
+ */
+extern map<string, int> const_init_map;
 
 // 所有 AST 的基类
 class BaseAST
 {
 public:
-  int name;
+  string name = "#";
   int val;
   virtual ~BaseAST() = default;
 
@@ -90,15 +99,21 @@ public:
   }
 };
 
-// Block
+// Block - "{" {bock_item} "}"
 class BlockAST : public BaseAST
 {
 public:
+  //vector<unique_ptr<BaseAST>> bock_items;
   unique_ptr<BaseAST> stmt;
 
   void Dump() const override
   {
     cout << "BlockAST { ";
+    // for (int i = 0; i < bock_items.size(); i++)
+    // {
+    //   bock_items[i]->Dump();
+    //   cout << "\n";
+    // }
     stmt->Dump();
     cout << " }";
   }
@@ -109,7 +124,31 @@ public:
     out += to_string(count_block);
     out += ":\n";
     count_block++;
+    // for (int i = 0; i < bock_items.size(); i++)
+    // {
+    //   bock_items[i]->printIR(out);
+    //   out += "\n";
+    // }
     stmt->printIR(out);
+  }
+};
+
+// BlockItem - decl | stmt;
+class BlockItemAST : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> decl_or_stmt;
+
+  void Dump() const override
+  {
+    cout << "BlockItem: { ";
+    decl_or_stmt->Dump();
+    cout << "}";
+  }
+
+  void printIR(string &out) override
+  {
+    decl_or_stmt->printIR(out);
   }
 };
 
@@ -129,7 +168,7 @@ public:
   void printIR(string &out) override
   {
     exp->printIR(out);
-    if (exp->name == -1)
+    if (exp->name == "#")
     {
       out += "ret ";
       out += (to_string(exp->val)).c_str();
@@ -137,8 +176,8 @@ public:
     }
     else
     {
-      out += "ret %";
-      out += (to_string(exp->name)).c_str();
+      out += "ret ";
+      out += (exp->name).c_str();
       out += "\n";
     }
   }
@@ -157,9 +196,9 @@ public:
   void printIR(string &out) override
   {
     unary_exp->printIR(out);
-    if (unary_exp->name == -1)
+    if (unary_exp->name == "#")
     {
-      name = -1;
+      name = "#";
       val = unary_exp->val;
     }
     else
@@ -182,9 +221,9 @@ public:
   void printIR(string &out) override
   {
     add_exp->printIR(out);
-    if (add_exp->name == -1)
+    if (add_exp->name == "#")
     {
-      name = -1;
+      name = "#";
       val = add_exp->val;
     }
     else
@@ -207,9 +246,9 @@ public:
   void printIR(string &out) override
   {
     lor_exp->printIR(out);
-    if (lor_exp->name == -1)
+    if (lor_exp->name == "#")
     {
-      name = -1;
+      name = "#";
       val = lor_exp->val;
     }
     else
@@ -234,9 +273,9 @@ public:
   void printIR(string &out) override
   {
     exp->printIR(out);
-    if (exp->name == -1)
+    if (exp->name == "#")
     {
-      name = -1;
+      name = "#";
       val = exp->val;
     }
     else
@@ -258,8 +297,24 @@ public:
   }
   void printIR(string &out) override
   {
-    name = -1;
+    name = "#";
     val = number;
+  }
+};
+
+// PrimaryExp - l_val
+class PrimaryExpAST_3 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> l_val;
+
+  void Dump() const override
+  {
+    l_val->Dump();
+  }
+  void printIR(string &out) override
+  {
+    name = l_val->name;
   }
 };
 
@@ -276,9 +331,9 @@ public:
   void printIR(string &out) override
   {
     primary_exp->printIR(out);
-    if (primary_exp->name == -1)
+    if (primary_exp->name == "#")
     {
-      name = -1;
+      name = "#";
       val = primary_exp->val;
     }
     else
@@ -306,9 +361,9 @@ public:
     switch (unary_op[0])
     {
     case '+':
-      if (unary_exp->name == -1)
+      if (unary_exp->name == "#")
       {
-        name = -1;
+        name = "#";
         val = unary_exp->val;
       }
       else
@@ -317,41 +372,27 @@ public:
       }
       break;
     case '-':
-      name = count_var;
-      out += "%";
-      out += (to_string(count_var)).c_str();
+      name = "%" + to_string(count_var);
+      out += name.c_str();
       out += " = sub 0, ";
-      if (unary_exp->name == -1)
-      {
+      if (unary_exp->name == "#")
         out += (to_string(unary_exp->val)).c_str();
-      }
       else
-      {
-        out += "%";
-        out += (to_string(unary_exp->name)).c_str();
-      }
+        out += (unary_exp->name).c_str();
       out += "\n";
       count_var++;
       break;
     case '!':
-      name = count_var;
-      out += "%";
-      out += (to_string(count_var)).c_str();
+      name = "%" + to_string(count_var);
+      out += name.c_str();
       out += " = eq 0, ";
-      if (unary_exp->name == -1)
-      {
+      if (unary_exp->name == "#")
         out += (to_string(unary_exp->val)).c_str();
-      }
       else
-      {
-        out += "%";
-        out += (to_string(unary_exp->name)).c_str();
-      }
+        out += (unary_exp->name).c_str();
       out += "\n";
       count_var++;
       break;
-    default:
-      out += "UnaryExpAST_2_err\n";
     }
   }
 };
@@ -369,9 +410,9 @@ public:
   void printIR(string &out) override
   {
     unary_exp->printIR(out);
-    if (unary_exp->name == -1)
+    if (unary_exp->name == "#")
     {
-      name = -1;
+      name = "#";
       val = unary_exp->val;
     }
     else
@@ -399,9 +440,8 @@ public:
   {
     mul_exp->printIR(out);
     unary_exp->printIR(out);
-    name = count_var;
-    out += "%";
-    out += (to_string(count_var)).c_str();
+    name = "%" + to_string(count_var);
+    out += name.c_str();
 
     switch (binary_op[0])
     {
@@ -414,29 +454,17 @@ public:
     case '%':
       out += " = mod ";
       break;
-    default:
-      break;
     }
 
-    if (mul_exp->name == -1)
-    {
+    if (mul_exp->name == "#")
       out += (to_string(mul_exp->val)).c_str();
-    }
     else
-    {
-      out += "%";
-      out += (to_string(mul_exp->name)).c_str();
-    }
+      out += (mul_exp->name).c_str();
     out += ", ";
-    if (unary_exp->name == -1)
-    {
+    if (unary_exp->name == "#")
       out += (to_string(unary_exp->val)).c_str();
-    }
     else
-    {
-      out += "%";
-      out += (to_string(unary_exp->name)).c_str();
-    }
+      out += (unary_exp->name).c_str();
     out += "\n";
     count_var++;
   }
@@ -455,9 +483,9 @@ public:
   void printIR(string &out) override
   {
     mul_exp->printIR(out);
-    if (mul_exp->name == -1)
+    if (mul_exp->name == "#")
     {
-      name = -1;
+      name = "#";
       val = mul_exp->val;
     }
     else
@@ -485,9 +513,8 @@ public:
   {
     add_exp->printIR(out);
     mul_exp->printIR(out);
-    name = count_var;
-    out += "%";
-    out += (to_string(count_var)).c_str();
+    name = "%" + to_string(count_var);
+    out += name.c_str();
 
     switch (binary_op[0])
     {
@@ -497,29 +524,17 @@ public:
     case '-':
       out += " = sub ";
       break;
-    default:
-      break;
     }
 
-    if (add_exp->name == -1)
-    {
+    if (add_exp->name == "#")
       out += (to_string(add_exp->val)).c_str();
-    }
     else
-    {
-      out += "%";
-      out += (to_string(add_exp->name)).c_str();
-    }
+      out += (add_exp->name).c_str();
     out += ", ";
-    if (mul_exp->name == -1)
-    {
+    if (mul_exp->name == "#")
       out += (to_string(mul_exp->val)).c_str();
-    }
     else
-    {
-      out += "%";
-      out += (to_string(mul_exp->name)).c_str();
-    }
+      out += (mul_exp->name).c_str();
     out += "\n";
     count_var++;
   }
@@ -538,9 +553,9 @@ public:
   void printIR(string &out) override
   {
     add_exp->printIR(out);
-    if (add_exp->name == -1)
+    if (add_exp->name == "#")
     {
-      name = -1;
+      name = "#";
       val = add_exp->val;
     }
     else
@@ -577,9 +592,8 @@ public:
     }
     rel_exp->printIR(out);
     add_exp->printIR(out);
-    name = count_var;
-    out += "%";
-    out += (to_string(count_var)).c_str();
+    name = "%" + to_string(count_var);
+    out += name.c_str();
 
     switch (type)
     {
@@ -595,29 +609,17 @@ public:
     case '>' + '=':
       out += " = ge ";
       break;
-    default:
-      break;
     }
 
-    if (rel_exp->name == -1)
-    {
+    if (rel_exp->name == "#")
       out += (to_string(rel_exp->val)).c_str();
-    }
     else
-    {
-      out += "%";
-      out += (to_string(rel_exp->name)).c_str();
-    }
+      out += (rel_exp->name).c_str();
     out += ", ";
-    if (add_exp->name == -1)
-    {
+    if (add_exp->name == "#")
       out += (to_string(add_exp->val)).c_str();
-    }
     else
-    {
-      out += "%";
-      out += (to_string(add_exp->name)).c_str();
-    }
+      out += (add_exp->name).c_str();
     out += "\n";
     count_var++;
   }
@@ -636,9 +638,9 @@ public:
   void printIR(string &out) override
   {
     rel_exp->printIR(out);
-    if (rel_exp->name == -1)
+    if (rel_exp->name == "#")
     {
-      name = -1;
+      name = "#";
       val = rel_exp->val;
     }
     else
@@ -666,9 +668,8 @@ public:
   {
     eq_exp->printIR(out);
     rel_exp->printIR(out);
-    name = count_var;
-    out += "%";
-    out += (to_string(count_var)).c_str();
+    name = "%" + to_string(count_var);
+    out += name.c_str();
 
     switch (eq_op[0])
     {
@@ -678,29 +679,17 @@ public:
     case '!':
       out += " = ne ";
       break;
-    default:
-      break;
     }
 
-    if (eq_exp->name == -1)
-    {
+    if (eq_exp->name == "#")
       out += (to_string(eq_exp->val)).c_str();
-    }
     else
-    {
-      out += "%";
-      out += (to_string(eq_exp->name)).c_str();
-    }
+      out += (eq_exp->name).c_str();
     out += ", ";
-    if (rel_exp->name == -1)
-    {
+    if (rel_exp->name == "#")
       out += (to_string(rel_exp->val)).c_str();
-    }
     else
-    {
-      out += "%";
-      out += (to_string(rel_exp->name)).c_str();
-    }
+      out += (rel_exp->name).c_str();
     out += "\n";
     count_var++;
   }
@@ -719,9 +708,9 @@ public:
   void printIR(string &out) override
   {
     eq_exp->printIR(out);
-    if (eq_exp->name == -1)
+    if (eq_exp->name == "#")
     {
-      name = -1;
+      name = "#";
       val = eq_exp->val;
     }
     else
@@ -750,54 +739,37 @@ public:
     land_exp->printIR(out);
     eq_exp->printIR(out);
 
-    int tmp_name_1 = count_var;
-    out += "%";
-    out += (to_string(count_var)).c_str();
+    string tmp_name_1 = "%" + to_string(count_var);
+    out += tmp_name_1.c_str();
 
     out += " = ne ";
 
-    if (land_exp->name == -1)
-    {
+    if (land_exp->name == "#")
       out += (to_string(land_exp->val)).c_str();
-    }
     else
-    {
-      out += "%";
-      out += (to_string(land_exp->name)).c_str();
-    }
+      out += (land_exp->name).c_str();
     out += ", 0\n";
     count_var++;
 
-    int tmp_name_2 = count_var;
-    out += "%";
-    out += (to_string(count_var)).c_str();
+    string tmp_name_2 = "%" + to_string(count_var);
+    out += tmp_name_2.c_str();
 
     out += " = ne ";
 
-    if (eq_exp->name == -1)
-    {
+    if (eq_exp->name == "#")
       out += (to_string(eq_exp->val)).c_str();
-    }
     else
-    {
-      out += "%";
-      out += (to_string(eq_exp->name)).c_str();
-    }
+      out += (eq_exp->name).c_str();
     out += ", 0\n";
     count_var++;
 
-    name = count_var;
-    out += "%";
-    out += (to_string(count_var)).c_str();
+    name = "%" + to_string(count_var);
+    out += name.c_str();
 
     out += " = and ";
-
-    out += "%";
-    out += (to_string(tmp_name_1)).c_str();
+    out += tmp_name_1.c_str();
     out += ", ";
-
-    out += "%";
-    out += (to_string(tmp_name_2)).c_str();
+    out += tmp_name_2.c_str();
     out += "\n";
     count_var++;
   }
@@ -816,9 +788,9 @@ public:
   void printIR(string &out) override
   {
     land_exp->printIR(out);
-    if (land_exp->name == -1)
+    if (land_exp->name == "#")
     {
-      name = -1;
+      name = "#";
       val = land_exp->val;
     }
     else
@@ -847,55 +819,173 @@ public:
     lor_exp->printIR(out);
     land_exp->printIR(out);
 
-    int tmp_name_1 = count_var;
-    out += "%";
-    out += (to_string(count_var)).c_str();
+    string tmp_name_1 = "%" + to_string(count_var);
+    out += tmp_name_1.c_str();
 
     out += " = ne ";
 
-    if (lor_exp->name == -1)
-    {
+    if (lor_exp->name == "#")
       out += (to_string(lor_exp->val)).c_str();
-    }
     else
-    {
-      out += "%";
-      out += (to_string(lor_exp->name)).c_str();
-    }
+      out += (lor_exp->name).c_str();
     out += ", 0\n";
     count_var++;
 
-    int tmp_name_2 = count_var;
-    out += "%";
-    out += (to_string(count_var)).c_str();
+    string tmp_name_2 = "%" + to_string(count_var);
+    out += tmp_name_2.c_str();
 
     out += " = ne ";
 
-    if (land_exp->name == -1)
-    {
+    if (land_exp->name == "#")
       out += (to_string(land_exp->val)).c_str();
-    }
     else
-    {
-      out += "%";
-      out += (to_string(land_exp->name)).c_str();
-    }
+      out += (land_exp->name).c_str();
     out += ", 0\n";
     count_var++;
 
-    name = count_var;
-    out += "%";
-    out += (to_string(count_var)).c_str();
+    name = "%" + to_string(count_var);
+    out += name.c_str();
 
     out += " = or ";
-
-    out += "%";
-    out += (to_string(tmp_name_1)).c_str();
+    out += tmp_name_1.c_str();
     out += ", ";
-
-    out += "%";
-    out += (to_string(tmp_name_2)).c_str();
+    out += tmp_name_2.c_str();
     out += "\n";
     count_var++;
+  }
+};
+
+// Decl - const_decl
+class DeclAST : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> const_decl;
+
+  void Dump() const override
+  {
+    const_decl->Dump();
+  }
+
+  void printIR(string &out) override
+  {
+    const_decl->printIR(out);
+    if (const_decl->name == "#")
+    {
+      name = "#";
+      val = const_decl->val;
+    }
+    else
+    {
+      name = const_decl->name;
+    }
+  }
+};
+
+// ConstDecl - "const" b_type const_def {"," const_def} ";";
+class ConstDeclAST : public BaseAST
+{
+public:
+  string b_type; // 目前只能是int
+  vector<unique_ptr<BaseAST>> const_defs;
+
+  void Dump() const override
+  {
+    cout << "const " << b_type << " ";
+    for (int i = 0; i < const_defs.size(); i++)
+    {
+      const_defs[i]->Dump();
+      if (i == const_defs.size() - 1)
+        cout << ";";
+      else
+        cout << ",";
+    }
+  }
+
+  void printIR(string &out) override
+  {
+    for (int i = 0; i < const_defs.size(); i++)
+    {
+      const_defs[i]->printIR(out);
+    }
+  }
+};
+
+// ConstDef - ident "=" const_init_val;
+class ConstDefAST : public BaseAST
+{
+public:
+  string ident;
+  unique_ptr<BaseAST> const_init_val;
+
+  void Dump() const override
+  {
+    cout << ident << " = ";
+    const_init_val->Dump();
+  }
+
+  void printIR(string &out) override
+  {
+    name = "@" + ident;
+    const_init_val->printIR(out);
+    assert(const_init_val->name == "#");
+    const_init_map.insert(make_pair(name, const_init_val->val));
+  }
+};
+
+// ConstInitVal - const_exp;
+class ConstInitValAST : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> const_exp;
+
+  void Dump() const override
+  {
+    const_exp->Dump();
+  }
+
+  void printIR(string &out) override
+  {
+    const_exp->printIR(out);
+    assert(const_exp->name == "#");
+    val = const_exp->val;
+  }
+};
+
+// LVal - ident;
+class LValAST : public BaseAST
+{
+public:
+  string ident;
+
+  void Dump() const override
+  {
+    cout << ident;
+  }
+
+  void printIR(string &out) override
+  {
+    string tmp_name = "@" + ident;
+    assert(const_init_map.count(tmp_name) != 0);
+    name = "#";
+    val = const_init_map.find(tmp_name)->second;
+  }
+};
+
+// ConstExp - Exp;
+class ConstExpAST : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> exp;
+
+  void Dump() const override
+  {
+    exp->Dump();
+  }
+
+  void printIR(string &out) override
+  {
+    exp->printIR(out);
+    assert(exp->name == "#");
+    val = exp->val;
   }
 };
