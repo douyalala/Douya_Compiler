@@ -1,5 +1,4 @@
-.text
-.globl main
-main:
-li a0, 2
-ret
+fun @main():i32{
+%block_0:
+ret 2
+ } 

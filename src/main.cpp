@@ -18,7 +18,7 @@ using namespace std;
 extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 FILE *out_file;
-map<string, int> const_init_map;
+map<string, VarUnion> var_map;
 
 int main(int argc, const char *argv[])
 {

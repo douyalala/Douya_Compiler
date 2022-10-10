@@ -10,16 +10,32 @@
 using namespace std;
 
 static int count_block = 0;
+
 /**
- * count_var给我新建的变量计数并命名
+ * count_var给我新建的临时变量计数并命名
  *  - 相应的非终结符AST中包含自己的名字var_n就是用这个命名
  *  - 如果那个符号不需要名字，比如是个常数，那var_n = -1
  */
 static int count_var = 0;
+
 /**
- * 记录常量的map
+ * 符号表相关
  */
-extern map<string, int> const_init_map;
+enum VarKind
+{
+  var_kind_CONST,
+  var_kind_VAR
+};
+struct VarUnion
+{
+  VarKind kind;
+  union
+  {
+    int const_val;
+    int var_addr;
+  };
+};
+extern map<string, VarUnion> var_map;
 
 // 所有 AST 的基类
 class BaseAST
@@ -57,14 +73,13 @@ public:
 class FuncDefAST : public BaseAST
 {
 public:
-  unique_ptr<BaseAST> func_type;
+  string func_type; // 目前只能是int - i32
   string ident;
   unique_ptr<BaseAST> block;
 
   void Dump() const override
   {
-    cout << "FuncDefAST { ";
-    func_type->Dump();
+    cout << "FuncDefAST { " << func_type;
     cout << ", " << ident << ", ";
     block->Dump();
     cout << " }";
@@ -75,27 +90,10 @@ public:
     out += "fun @";
     out += ident;
     out += "():";
-    func_type->printIR(out);
+    out += func_type;
     out += "{\n";
     block->printIR(out);
     out += " } ";
-  }
-};
-
-// FuncType
-class FuncTypeAST : public BaseAST
-{
-public:
-  // level 1:只是个int，没什么用
-
-  void Dump() const override
-  {
-    cout << "FuncTypeAST { int }";
-  }
-
-  void printIR(string &out) override
-  {
-    out += " i32 ";
   }
 };
 
@@ -150,7 +148,7 @@ public:
 };
 
 // Stmt - return exp;
-class StmtAST : public BaseAST
+class StmtAST_1 : public BaseAST
 {
 public:
   unique_ptr<BaseAST> exp;
@@ -175,6 +173,46 @@ public:
     {
       out += "ret ";
       out += (exp->name).c_str();
+      out += "\n";
+    }
+  }
+};
+
+// Stmt - l_val "=" exp ";"
+class StmtAST_2 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> l_val;
+  unique_ptr<BaseAST> exp;
+
+  void Dump() const override
+  {
+    cout << "StmtAST { ";
+    l_val->Dump();
+    cout << "=";
+    exp->Dump();
+    cout << " }";
+  }
+
+  void printIR(string &out) override
+  {
+    l_val->printIR(out);
+    assert(l_val->name != "#");
+    exp->printIR(out);
+    if (exp->name == "#")
+    {
+      out += "store ";
+      out += to_string(exp->val).c_str();
+      out += ", ";
+      out += l_val->name;
+      out += "\n";
+    }
+    else
+    {
+      out += "store ";
+      out += exp->name;
+      out += ", ";
+      out += l_val->name;
       out += "\n";
     }
   }
@@ -312,9 +350,21 @@ public:
   void printIR(string &out) override
   {
     l_val->printIR(out);
-    assert(l_val->name == "#");
-    name = l_val->name;
-    val = l_val->val;
+
+    if (l_val->name == "#")
+    {
+      name = "#";
+      val = l_val->val;
+    }
+    else
+    {
+      name = "%" + to_string(count_var);
+      out += name;
+      out += " = load ";
+      out += l_val->name;
+      out += "\n";
+      count_var++;
+    }
   }
 };
 
@@ -961,7 +1011,7 @@ public:
 };
 
 // Decl - const_decl
-class DeclAST : public BaseAST
+class DeclAST_1 : public BaseAST
 {
 public:
   unique_ptr<BaseAST> const_decl;
@@ -976,15 +1026,25 @@ public:
   void printIR(string &out) override
   {
     const_decl->printIR(out);
-    if (const_decl->name == "#")
-    {
-      name = "#";
-      val = const_decl->val;
-    }
-    else
-    {
-      name = const_decl->name;
-    }
+  }
+};
+
+// Decl - var_decl
+class DeclAST_2 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> var_decl;
+
+  void Dump() const override
+  {
+    cout << "DeclAST { ";
+    var_decl->Dump();
+    cout << " }";
+  }
+
+  void printIR(string &out) override
+  {
+    var_decl->printIR(out);
   }
 };
 
@@ -1035,7 +1095,10 @@ public:
     name = "@" + ident;
     const_init_val->printIR(out);
     assert(const_init_val->name == "#");
-    const_init_map.insert(make_pair(name, const_init_val->val));
+    VarUnion const_tmp;
+    const_tmp.kind = var_kind_CONST;
+    const_tmp.const_val = const_init_val->val;
+    var_map.insert(make_pair(name, const_tmp));
   }
 };
 
@@ -1058,6 +1121,129 @@ public:
   }
 };
 
+// VarDecl - b_type var_def {"," var_def} ";";
+class VarDeclAST : public BaseAST
+{
+public:
+  string b_type; // 目前只能是int
+  vector<unique_ptr<BaseAST>> *var_defs;
+
+  void Dump() const override
+  {
+    cout << b_type << " ";
+    for (int i = 0; i < var_defs->size(); i++)
+    {
+      var_defs->at(i)->Dump();
+      if (i == var_defs->size() - 1)
+        cout << "; ";
+      else
+        cout << ",";
+    }
+  }
+
+  void printIR(string &out) override
+  {
+    for (int i = 0; i < var_defs->size(); i++)
+    {
+      var_defs->at(i)->printIR(out);
+    }
+  }
+};
+
+// VarDef - ident
+class VarDefAST_1 : public BaseAST
+{
+public:
+  string ident;
+
+  void Dump() const override
+  {
+    cout << ident;
+  }
+
+  void printIR(string &out) override
+  {
+    name = "@" + ident;
+    out += name;
+    out += " = alloc i32\n";
+
+    VarUnion var_tmp;
+    var_tmp.kind = var_kind_VAR;
+    var_tmp.var_addr = 0;
+    var_map.insert(make_pair(name, var_tmp));
+  }
+};
+
+// VarDef - ident "=" init_val;
+class VarDefAST_2 : public BaseAST
+{
+public:
+  string ident;
+  unique_ptr<BaseAST> init_val;
+
+  void Dump() const override
+  {
+    cout << ident << " = ";
+    init_val->Dump();
+  }
+
+  void printIR(string &out) override
+  {
+    name = "@" + ident;
+    out += name;
+    out += " = alloc i32\n";
+
+    init_val->printIR(out);
+    if (init_val->name == "#")
+    {
+      out += "store ";
+      out += to_string(init_val->val).c_str();
+      out += ", ";
+      out += name;
+      out += "\n";
+    }
+    else
+    {
+      out += "store ";
+      out += init_val->name;
+      out += ", ";
+      out += name;
+      out += "\n";
+    }
+
+    VarUnion var_tmp;
+    var_tmp.kind = var_kind_VAR;
+    var_tmp.var_addr = 0;
+    var_map.insert(make_pair(name, var_tmp));
+  }
+};
+
+// InitVal - exp;
+class InitValAST : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> exp;
+
+  void Dump() const override
+  {
+    exp->Dump();
+  }
+
+  void printIR(string &out) override
+  {
+    exp->printIR(out);
+    if (exp->name == "#")
+    {
+      name = "#";
+      val = exp->val;
+    }
+    else
+    {
+      name = exp->name;
+    }
+  }
+};
+
 // LVal - ident;
 class LValAST : public BaseAST
 {
@@ -1072,9 +1258,16 @@ public:
   void printIR(string &out) override
   {
     string tmp_name = "@" + ident;
-    assert(const_init_map.count(tmp_name) != 0);
-    name = "#";
-    val = const_init_map.find(tmp_name)->second;
+    assert(var_map.count(tmp_name) != 0);
+    if (var_map.find(tmp_name)->second.kind == var_kind_CONST)
+    {
+      name = "#";
+      val = var_map.find(tmp_name)->second.const_val;
+    }
+    else
+    {
+      name = tmp_name;
+    }
   }
 };
 
