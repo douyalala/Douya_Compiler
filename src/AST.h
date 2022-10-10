@@ -13,14 +13,12 @@ static int count_block = 0;
 
 /**
  * count_var给我新建的临时变量计数并命名
- *  - 相应的非终结符AST中包含自己的名字var_n就是用这个命名
- *  - 如果那个符号不需要名字，比如是个常数，那var_n = -1
+ *  - 相应的非终结符AST中包含自己的名字name就是用这个命名
+ *  - 如果那个符号不需要名字，比如是个常数，那name="#"
  */
 static int count_var = 0;
 
-/**
- * 符号表相关
- */
+// 符号表相关
 enum VarKind
 {
   var_kind_CONST,

@@ -48,7 +48,7 @@ int main(int argc, const char *argv[])
   ast->printIR(IRstring);
   const char *IRstr = IRstring.c_str();
 
-  //如果进行koopa测试，则输出
+  //进行koopa测试
   if(mode[1]=='k'){
     out_file = fopen(output, "w+");
     assert(out_file);
@@ -75,7 +75,6 @@ int main(int argc, const char *argv[])
   }
   Visit(raw);
   
-
   // 处理完成, 释放 raw program builder 占用的内存
   // 注意, raw program 中所有的指针指向的内存均为 raw program builder 的内存
   // 所以不要在 raw program 处理完毕之前释放 builder
