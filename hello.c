@@ -1,4 +1,3 @@
 int main() {
-  const int x = 2, y = x;
-  return y;
+  return 1 <= 2;
 }

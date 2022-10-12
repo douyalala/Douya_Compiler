@@ -3,6 +3,7 @@
 #include <cstring>
 #include <string>
 #include <map>
+#include <deque>
 #include "koopa.h"
 
 bool a[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -11,6 +12,8 @@ bool t[7] = {0, 0, 0, 0, 0, 0, 0};
 using namespace std;
 
 map<koopa_raw_value_t, string> mem_map;
+deque<deque<string>> save_reg;
+deque<int> save_stack_size;
 
 // 函数声明
 void Visit(const koopa_raw_program_t &program);
@@ -20,6 +23,10 @@ void Visit(const koopa_raw_value_t &value);
 void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_value);
 void Visit(const koopa_raw_integer_t &intInst, const koopa_raw_value_t &super_value);
 void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_value);
+void Visit(const koopa_raw_global_alloc_t &intInst, const koopa_raw_value_t &super_value);
+void Visit_alloc(const koopa_raw_value_t &super_value);
+void Visit(const koopa_raw_load_t &intInst, const koopa_raw_value_t &super_value);
+void Visit(const koopa_raw_store_t &intInst, const koopa_raw_value_t &super_value);
 
 void Visit(const koopa_raw_slice_t &slice);
 
@@ -51,12 +58,62 @@ string Find_reg()
 void Free_reg(string reg)
 {
     if (reg[0] == 'a')
-    {
         a[(reg[1] - '0')] = 0;
-    }
     else
-    {
         t[(reg[1] - '0')] = 0;
+}
+
+void count_Push_reg()
+{
+    deque<string> tmp;
+    for (int i = 0; i < 7; i++)
+    {
+        if (t[i] == 1)
+        {
+            string reg_name = "t" + to_string(i);
+            tmp.push_back(reg_name);
+        }
+    }
+    for (int i = 0; i < 8; i++)
+    {
+        if (a[i] == 1)
+        {
+            string reg_name = "a" + to_string(i);
+            tmp.push_back(reg_name);
+        }
+    }
+    save_reg.push_back(tmp);
+}
+
+void Push_reg()
+{
+    int stack_size = save_stack_size.at(save_stack_size.size() - 1);
+    deque<string> tmp = save_reg.at(save_reg.size() - 1);
+    int reg_n = tmp.size();
+    for (int i = 0; i < reg_n; i++)
+    {
+        string reg_name = tmp.at(i);
+        Free_reg(reg_name);
+        int pian_yi = stack_size - (i + 1) * 4;
+        cout << "sw " << reg_name << ", " << pian_yi << "(sp)" << endl;
+    }
+}
+
+void Pop_reg()
+{
+    int stack_size = save_stack_size.at(save_stack_size.size() - 1);
+    deque<string> tmp = save_reg.at(save_reg.size() - 1);
+    save_reg.pop_back();
+    int reg_n = tmp.size();
+    for (int i = 0; i < reg_n; i++)
+    {
+        string reg_name = tmp.at(i);
+        if (reg_name[0] == 'a')
+            a[(reg_name[1] - '0')] = 1;
+        else
+            t[(reg_name[1] - '0')] = 1;
+        int pian_yi = stack_size - (i + 1) * 4;
+        cout << "lw " << reg_name << ", " << pian_yi << "(sp)" << endl;
     }
 }
 
@@ -98,9 +155,34 @@ void Visit(const koopa_raw_function_t &func)
     // koopa_raw_slice_t bbs;
 
     // 执行一些其他的必要操作
+    // 输出函数名：
     string tmp_name(func->name);
-
     cout << tmp_name.substr(1, strlen(func->name)) << ":\n";
+
+    // 扩展sp
+    int stack_size = 0;
+    // 记录需要保存的寄存器数量和名字
+    count_Push_reg();
+    // 需要为保存寄存器分配的栈的大小
+    stack_size += (save_reg.at(save_reg.size() - 1).size()) * 4;
+
+    // TODO:
+    // 计算需要为变量分配的栈大小（遍历所有指令，计算局部变量的个数*4，然后对齐到16）:
+    // 我觉得这个时候可以顺路先把mem_map（指令-变量对应表）建立了
+    // 因为完全不用寄存器了，所以mem_map的value可以改成int，即相对于sp的偏移量
+
+    // 保存当前栈帧大小
+    save_stack_size.push_back(stack_size);
+    // 挪sp
+    if (stack_size != 0)
+    {
+        if (stack_size >= -2048 && stack_size <= 2047)
+            cout << "addi sp, sp, " << -stack_size << endl;
+        else // TODO 用 li 加载立即数到一个临时寄存器 (比如 t0), 然后用 add 指令来更新 sp
+            assert(false);
+    }
+    // 保存寄存器：
+    Push_reg();
 
     // 访问所有基本块
     for (size_t i = 0; i < func->bbs.len; ++i)
@@ -164,6 +246,22 @@ void Visit(const koopa_raw_value_t &value)
         // 访问 binary 指令
         Visit(kind.data.binary, value);
         break;
+    case KOOPA_RVT_GLOBAL_ALLOC:
+        // 访问 global_alloc 指令
+        Visit(kind.data.global_alloc, value);
+        break;
+    case KOOPA_RVT_ALLOC:
+        // 访问 alloc 指令
+        Visit_alloc(value);
+        break;
+    case KOOPA_RVT_LOAD:
+        // 访问 load 指令
+        Visit(kind.data.load, value);
+        break;
+    case KOOPA_RVT_STORE:
+        // 访问 store 指令
+        Visit(kind.data.store, value);
+        break;
     default:
         // 其他类型暂时遇不到
         assert(false);
@@ -177,9 +275,23 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
     /// Return value, null if no return value.
     // koopa_raw_value_t value;
 
+    // 返回之前，解放保存的寄存器
+    Pop_reg();
+    // 把sp挪回去
+    int stack_size = save_stack_size.at(save_stack_size.size() - 1);
+    save_stack_size.pop_back();
+    if (stack_size != 0)
+    {
+        if (stack_size >= -2048 && stack_size <= 2047)
+            cout << "addi sp, sp, " << stack_size << endl;
+        else // TODO 用 li 加载立即数到一个临时寄存器 (比如 t0), 然后用 add 指令来更新 sp
+            assert(false);
+    }
+
     // 如果是常数，就li，否则mv
 
-    if(retInst.value->kind.tag==KOOPA_RVT_INTEGER){
+    if (retInst.value->kind.tag == KOOPA_RVT_INTEGER)
+    {
         cout << "li a0, " << retInst.value->kind.data.integer.value;
         cout << "\nret\n";
         return;
@@ -333,6 +445,30 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
     Free_reg(right_val);
     mem_map.erase(binaryInst.lhs);
     mem_map.erase(binaryInst.rhs);
+}
+
+// 访问指令-global_alloc
+void Visit(const koopa_raw_global_alloc_t &intInst, const koopa_raw_value_t &super_value)
+{
+    // TODO
+}
+
+// 访问指令-alloc
+void Visit_alloc(const koopa_raw_value_t &super_value)
+{
+    // TODO
+}
+
+// 访问指令-load
+void Visit(const koopa_raw_load_t &intInst, const koopa_raw_value_t &super_value)
+{
+    // TODO
+}
+
+// 访问指令-store
+void Visit(const koopa_raw_store_t &intInst, const koopa_raw_value_t &super_value)
+{
+    // TODO
 }
 
 // 访问 raw slice
