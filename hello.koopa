@@ -1,15 +1,9 @@
 .text
 .globl main
 main:
-addi sp, sp, -16
-sw t1, 12(sp)
-sw t2, 8(sp)
-sw a0, 4(sp)
-sw a1, 0(sp)
-lw t1, 12(sp)
-lw t2, 8(sp)
-lw a0, 4(sp)
-lw a1, 0(sp)
-addi sp, sp, 16
+li t0, -3216
+add sp, sp, t0
+li t0, 3216
+add sp, sp, t0
 li a0, 1
 ret

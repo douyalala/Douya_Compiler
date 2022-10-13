@@ -167,9 +167,13 @@ void Visit(const koopa_raw_function_t &func)
     stack_size += (save_reg.at(save_reg.size() - 1).size()) * 4;
 
     // TODO:
-    // 计算需要为变量分配的栈大小（遍历所有指令，计算局部变量的个数*4，然后对齐到16）:
+    // 计算需要为变量分配的栈大小（遍历所有指令，计算局部变量的个数*4）:
     // 我觉得这个时候可以顺路先把mem_map（指令-变量对应表）建立了
     // 因为完全不用寄存器了，所以mem_map的value可以改成int，即相对于sp的偏移量
+
+    // sp对齐到16
+    if (stack_size % 16 != 0)
+        stack_size += (16 - stack_size % 16);
 
     // 保存当前栈帧大小
     save_stack_size.push_back(stack_size);
@@ -178,8 +182,13 @@ void Visit(const koopa_raw_function_t &func)
     {
         if (stack_size >= -2048 && stack_size <= 2047)
             cout << "addi sp, sp, " << -stack_size << endl;
-        else // TODO 用 li 加载立即数到一个临时寄存器 (比如 t0), 然后用 add 指令来更新 sp
-            assert(false);
+        else
+        {
+            string tmp_reg = Find_reg();
+            cout << "li " << tmp_reg << ", " << -stack_size << endl;
+            cout << "add sp, sp, " << tmp_reg << endl;
+            Free_reg(tmp_reg);
+        }
     }
     // 保存寄存器：
     Push_reg();
@@ -284,8 +293,13 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
     {
         if (stack_size >= -2048 && stack_size <= 2047)
             cout << "addi sp, sp, " << stack_size << endl;
-        else // TODO 用 li 加载立即数到一个临时寄存器 (比如 t0), 然后用 add 指令来更新 sp
-            assert(false);
+        else
+        {
+            string tmp_reg = Find_reg();
+            cout << "li " << tmp_reg << ", " << stack_size << endl;
+            cout << "add sp, sp, " << tmp_reg << endl;
+            Free_reg(tmp_reg);
+        }
     }
 
     // 如果是常数，就li，否则mv
