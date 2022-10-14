@@ -4,6 +4,7 @@
 #include <string>
 #include <cstring>
 #include <vector>
+#include <deque>
 #include <assert.h>
 #include <map>
 
@@ -22,18 +23,54 @@ static int count_var = 0;
 enum VarKind
 {
   var_kind_CONST,
-  var_kind_VAR
+  var_kind_VAR,
+  var_kind_ERROR
 };
 struct VarUnion
 {
   VarKind kind;
+  int def_block_id;
   union
   {
     int const_val;
     int var_addr;
   };
 };
-extern map<string, VarUnion> var_map;
+
+class Multi_Var_Map
+{
+public:
+  Multi_Var_Map *outer_map = nullptr;
+  map<string, VarUnion> var_map;
+
+  void insert(string name, VarUnion var_u)
+  {
+    var_map.insert(make_pair(name, var_u));
+  }
+
+  VarUnion find(string name)
+  {
+    if (var_map.count(name))
+    {
+      return var_map.find(name)->second;
+    }
+    else
+    {
+      if (outer_map != nullptr)
+      {
+        return outer_map->find(name);
+      }
+      else
+      {
+        VarUnion tmp;
+        tmp.kind = var_kind_ERROR;
+        return tmp;
+      }
+    }
+  }
+};
+
+extern Multi_Var_Map *top_var_map;
 
 // 所有 AST 的基类
 class BaseAST
@@ -90,6 +127,11 @@ public:
     out += "():";
     out += func_type;
     out += "{\n";
+
+    // TODO：处理基本块的问题
+    out += "%block_entry";
+    out += ":\n";
+
     block->printIR(out);
     out += " } ";
   }
@@ -115,14 +157,17 @@ public:
 
   void printIR(string &out) override
   {
-    out += "%block_";
-    out += to_string(count_block);
-    out += ":\n";
+    Multi_Var_Map *new_top = new Multi_Var_Map;
+    new_top->outer_map = top_var_map;
+    top_var_map = new_top;
+
     count_block++;
     for (int i = 0; i < block_items->size(); i++)
     {
       block_items->at(i)->printIR(out);
     }
+
+    top_var_map = top_var_map->outer_map;
   }
 };
 
@@ -145,33 +190,41 @@ public:
   }
 };
 
-// Stmt - return exp;
+// Stmt - return [exp];
 class StmtAST_1 : public BaseAST
 {
 public:
-  unique_ptr<BaseAST> exp;
+  unique_ptr<BaseAST> exp = nullptr;
 
   void Dump() const override
   {
     cout << "StmtAST { return ";
-    exp->Dump();
+    if (exp != nullptr)
+      exp->Dump();
     cout << " }";
   }
 
   void printIR(string &out) override
   {
-    exp->printIR(out);
-    if (exp->name == "#")
+    if (exp != nullptr)
     {
-      out += "ret ";
-      out += (to_string(exp->val)).c_str();
-      out += "\n";
+      exp->printIR(out);
+      if (exp->name == "#")
+      {
+        out += "ret ";
+        out += (to_string(exp->val)).c_str();
+        out += "\n";
+      }
+      else
+      {
+        out += "ret ";
+        out += (exp->name).c_str();
+        out += "\n";
+      }
     }
     else
     {
-      out += "ret ";
-      out += (exp->name).c_str();
-      out += "\n";
+      out += "ret\n";
     }
   }
 };
@@ -213,6 +266,50 @@ public:
       out += l_val->name;
       out += "\n";
     }
+  }
+};
+
+// Stmt - [exp] ";"
+class StmtAST_3 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> exp = nullptr;
+
+  void Dump() const override
+  {
+    if (exp != nullptr)
+    {
+      cout << "StmtAST { ";
+      exp->Dump();
+      cout << " }";
+    }
+  }
+
+  void printIR(string &out) override
+  {
+    if (exp != nullptr)
+    {
+      exp->printIR(out);
+    }
+  }
+};
+
+// Stmt - block
+class StmtAST_4 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> block;
+
+  void Dump() const override
+  {
+    cout << "StmtAST { ";
+    block->Dump();
+    cout << " }";
+  }
+
+  void printIR(string &out) override
+  {
+    block->printIR(out);
   }
 };
 
@@ -1096,7 +1193,8 @@ public:
     VarUnion const_tmp;
     const_tmp.kind = var_kind_CONST;
     const_tmp.const_val = const_init_val->val;
-    var_map.insert(make_pair(name, const_tmp));
+    const_tmp.def_block_id = count_block;
+    top_var_map->insert(name, const_tmp);
   }
 };
 
@@ -1162,13 +1260,14 @@ public:
   void printIR(string &out) override
   {
     name = "@" + ident;
-    out += name;
+    out += name + "_" + to_string(count_block);
     out += " = alloc i32\n";
 
     VarUnion var_tmp;
     var_tmp.kind = var_kind_VAR;
     var_tmp.var_addr = 0;
-    var_map.insert(make_pair(name, var_tmp));
+    var_tmp.def_block_id = count_block;
+    top_var_map->insert(name, var_tmp);
   }
 };
 
@@ -1188,7 +1287,7 @@ public:
   void printIR(string &out) override
   {
     name = "@" + ident;
-    out += name;
+    out += name + "_" + to_string(count_block);
     out += " = alloc i32\n";
 
     init_val->printIR(out);
@@ -1197,7 +1296,7 @@ public:
       out += "store ";
       out += to_string(init_val->val).c_str();
       out += ", ";
-      out += name;
+      out += name + "_" + to_string(count_block);
       out += "\n";
     }
     else
@@ -1205,14 +1304,15 @@ public:
       out += "store ";
       out += init_val->name;
       out += ", ";
-      out += name;
+      out += name + "_" + to_string(count_block);
       out += "\n";
     }
 
     VarUnion var_tmp;
     var_tmp.kind = var_kind_VAR;
     var_tmp.var_addr = 0;
-    var_map.insert(make_pair(name, var_tmp));
+    var_tmp.def_block_id = count_block;
+    top_var_map->insert(name, var_tmp);
   }
 };
 
@@ -1256,15 +1356,16 @@ public:
   void printIR(string &out) override
   {
     string tmp_name = "@" + ident;
-    assert(var_map.count(tmp_name) != 0);
-    if (var_map.find(tmp_name)->second.kind == var_kind_CONST)
+    VarUnion var_u = top_var_map->find(tmp_name);
+    assert(var_u.kind != var_kind_ERROR);
+    if (var_u.kind == var_kind_CONST)
     {
       name = "#";
-      val = var_map.find(tmp_name)->second.const_val;
+      val = var_u.const_val;
     }
     else
     {
-      name = tmp_name;
+      name = tmp_name + "_" + to_string(var_u.def_block_id);
     }
   }
 };

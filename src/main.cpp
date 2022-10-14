@@ -19,6 +19,7 @@ extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 FILE *out_file;
 map<string, VarUnion> var_map;
+Multi_Var_Map *top_var_map = new Multi_Var_Map;
 
 int main(int argc, const char *argv[])
 {
@@ -29,7 +30,7 @@ int main(int argc, const char *argv[])
   auto input = argv[2];
   auto output = argv[4];
 
-  cout<<mode<<"\n";
+  cout << mode << "\n";
 
   // 打开输入文件, 并且指定 lexer 在解析的时候读取这个文件
   yyin = fopen(input, "r");
@@ -43,16 +44,17 @@ int main(int argc, const char *argv[])
   // //Dump输出调试
   // ast->Dump();
 
-  // AST 转换为 字符串 IR 
+  // AST 转换为 字符串 IR
   string IRstring = "";
   ast->printIR(IRstring);
   const char *IRstr = IRstring.c_str();
 
   //进行koopa测试
-  if(mode[1]=='k'){
+  if (mode[1] == 'k')
+  {
     out_file = fopen(output, "w+");
     assert(out_file);
-    fprintf(out_file,"%s", IRstr);
+    fprintf(out_file, "%s", IRstr);
     fclose(out_file);
     return 0;
   }
@@ -70,11 +72,12 @@ int main(int argc, const char *argv[])
 
   // 处理 raw program
   // 且如果测试为riscv，就输出到指定文件（输出重定向
-  if(mode[1]=='r'){
-    freopen(output, "w+" , stdout);
+  if (mode[1] == 'r')
+  {
+    freopen(output, "w+", stdout);
   }
   Visit(raw);
-  
+
   // 处理完成, 释放 raw program builder 占用的内存
   // 注意, raw program 中所有的指针指向的内存均为 raw program builder 的内存
   // 所以不要在 raw program 处理完毕之前释放 builder

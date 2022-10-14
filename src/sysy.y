@@ -117,12 +117,30 @@ Stmt
     ast->exp = unique_ptr<BaseAST>($2);
     $$ = ast;
   };
+  | RETURN ';' {
+    auto ast = new StmtAST_1();
+    $$ = ast;
+  };
   | LVal '=' Exp ';' {
     auto ast = new StmtAST_2();
     ast->l_val = unique_ptr<BaseAST>($1);
     ast->exp = unique_ptr<BaseAST>($3);
     $$ = ast;
   };
+  | Exp ';' {
+    auto ast = new StmtAST_3();
+    ast->exp = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  };
+  | ';' {
+    auto ast = new StmtAST_3();
+    $$ = ast;
+  };
+  | Block {
+    auto ast = new StmtAST_4();
+    ast->block = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
 
 Exp 
   : UnaryExp {

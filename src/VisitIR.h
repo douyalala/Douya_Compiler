@@ -8,18 +8,24 @@
 #include <vector>
 #include "koopa.h"
 
-bool a[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-bool t[7] = {0, 0, 0, 0, 0, 0, 0};
-
 using namespace std;
 
+// 寄存器使用情况
+bool a[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+bool t[7] = {0, 0, 0, 0, 0, 0, 0};
+// 栈帧使用情况
+deque<vector<bool>> stack_frame;
+
+// 符号表-指令 和 寄存器或栈 对应关系
 map<koopa_raw_value_t, string> mem_map_reg;
 map<koopa_raw_value_t, int> mem_map_stack;
-deque<vector<bool>> stack_frame;
+
+// 用于计数部分的临时栈帧使用情况和临时符号表
+// 暂时没发现寄存器部分使用原版会出什么问题，所以没有单开临时寄存器数组
 vector<bool> stack_frame_count;
 map<koopa_raw_value_t, string> count_mem_map_reg;
 map<koopa_raw_value_t, int> count_mem_map_stack;
-int max_count_stack = 0;
+
 deque<deque<string>> save_reg;
 deque<int> save_stack_size;
 
@@ -110,8 +116,7 @@ int Find_stack_count()
             return i;
         }
     }
-    // 没有找到空位，那就把max_count_stack++，然后返回最后一个位置
-    max_count_stack++;
+    // 没有找到空位，那就把push_back，然后返回最后一个位置
     stack_frame_count.push_back(1);
     return stack_frame_count.size() - 1;
 }
@@ -222,14 +227,13 @@ void Visit(const koopa_raw_function_t &func)
     // 需要为保存寄存器分配的栈的大小
     stack_size += (save_reg.back().size()) * 4;
 
-    // TODO:
-    // 计算需要为变量分配的栈大小（遍历所有指令，计算局部变量的个数*4）:
-    // 我觉得这个时候可以顺路先把mem_map（指令-变量对应表）建立了
-    // 因为完全不用寄存器了，所以mem_map的value可以改成int，即相对于sp的偏移量
+    // 计算需要为变量分配的栈大小（遍历所有指令，计算变量的个数*4）
+
+    // 清空临时栈帧和临时符号表
     count_mem_map_reg.clear();
     count_mem_map_stack.clear();
     stack_frame_count.clear();
-    max_count_stack = 0;
+
     // 计算所有基本块用到的变量
     for (size_t i = 0; i < func->bbs.len; ++i)
     {
@@ -238,6 +242,9 @@ void Visit(const koopa_raw_function_t &func)
         Count_var(bb);
     }
 
+    // 得到需要为变量开的栈的大小 max_count_stack*4
+    // 并建立一个正式的栈帧使用情况表 vector<bool>
+    int max_count_stack = stack_frame_count.size();
     vector<bool> this_stack_frame;
     for (int i = 0; i < max_count_stack; i++)
         this_stack_frame.push_back(0);
@@ -250,6 +257,7 @@ void Visit(const koopa_raw_function_t &func)
         stack_size += (16 - stack_size % 16);
 
     // 保存当前栈帧大小
+    // 为return时候挪sp准备
     save_stack_size.push_back(stack_size);
 
     // 挪sp
@@ -265,6 +273,7 @@ void Visit(const koopa_raw_function_t &func)
             Free_reg(tmp_reg);
         }
     }
+
     // 保存寄存器
     Push_reg();
 
@@ -276,6 +285,7 @@ void Visit(const koopa_raw_function_t &func)
         Visit(bb);
     }
 
+    // 把栈帧记录表pop掉
     stack_frame.pop_back();
 }
 
@@ -362,22 +372,25 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
     // koopa_raw_value_t value;
 
     // 设置返回值：如果是常数，就li，否则mv
-    if (retInst.value->kind.tag == KOOPA_RVT_INTEGER)
-        cout << "li a0, " << retInst.value->kind.data.integer.value << endl;
-    else
+    if (retInst.value != nullptr)
     {
-        if (!(mem_map_reg.count(retInst.value) || mem_map_stack.count(retInst.value)))
-            Visit(retInst.value);
-        assert(mem_map_reg.count(retInst.value) || mem_map_stack.count(retInst.value));
-        if (mem_map_reg.count(retInst.value))
+        if (retInst.value->kind.tag == KOOPA_RVT_INTEGER)
+            cout << "li a0, " << retInst.value->kind.data.integer.value << endl;
+        else
         {
-            cout << "mv a0, " << mem_map_reg.find(retInst.value)->second << endl;
-            Free_reg(mem_map_reg.find(retInst.value)->second);
-            mem_map_reg.erase(retInst.value);
-        }
-        if (mem_map_stack.count(retInst.value))
-        {
-            cout << "lw a0, " << mem_map_stack.find(retInst.value)->second << "(sp)" << endl;
+            if (!(mem_map_reg.count(retInst.value) || mem_map_stack.count(retInst.value)))
+                Visit(retInst.value);
+            assert(mem_map_reg.count(retInst.value) || mem_map_stack.count(retInst.value));
+            if (mem_map_reg.count(retInst.value))
+            {
+                cout << "mv a0, " << mem_map_reg.find(retInst.value)->second << endl;
+                Free_reg(mem_map_reg.find(retInst.value)->second);
+                mem_map_reg.erase(retInst.value);
+            }
+            if (mem_map_stack.count(retInst.value))
+            {
+                cout << "lw a0, " << mem_map_stack.find(retInst.value)->second << "(sp)" << endl;
+            }
         }
     }
 
