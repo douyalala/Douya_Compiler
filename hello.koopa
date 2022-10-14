@@ -1,18 +1,10 @@
-.text
-.globl main
-main:
-addi sp, sp, -16
-li t0, 10
-sw t0, 0(sp)
-
-lw t0, 0(sp)
-li t1, 1
-add t0, t0, t1
-sw t0, 4(sp)
-
-lw t0, 4(sp)
-sw t0, 0(sp)
-
-lw a0, 0(sp)
-addi sp, sp, 16
-ret
+fun @main():i32{
+%block_0:
+@x = alloc i32
+store 10, @x
+%0 = load @x
+%1 = add %0, 1
+store %1, @x
+%2 = load @x
+ret %2
+ } 
