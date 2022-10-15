@@ -16,11 +16,14 @@ python3 test_old.py
 
 ## 当前进度
 
-Lv6.1结束 \\
-Lv6即以前的本地测试全部PASS \\
+Lv6.1结束
+
+Lv6即以前的本地测试全部PASS
+
 TODO List：
 - Lv7 While
 - Lv8 函数和全局变量
 - Lv9 数组
+
 注意：
 - Lv6.2 短路求值：目前没有相关测试，可能有未知错误
