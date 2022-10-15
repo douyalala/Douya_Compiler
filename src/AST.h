@@ -190,15 +190,55 @@ public:
   }
 };
 
-// Stmt - return [exp];
+// Stmt - match_stmt
 class StmtAST_1 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> match_stmt;
+
+  void Dump() const override
+  {
+    cout << "StmtAST { ";
+    match_stmt->Dump();
+    cout << " }";
+  }
+
+  void printIR(string &out) override
+  {
+    // TODO
+    match_stmt->printIR(out);
+  }
+};
+
+// Stmt - unmatch_stmt
+class StmtAST_2 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> unmatch_stmt;
+
+  void Dump() const override
+  {
+    cout << "StmtAST { ";
+    unmatch_stmt->Dump();
+    cout << " }";
+  }
+
+  void printIR(string &out) override
+  {
+    // TODO
+    unmatch_stmt->printIR(out);
+  }
+};
+
+// MatchStmt - return [exp];
+class MatchStmtAST_1 : public BaseAST
 {
 public:
   unique_ptr<BaseAST> exp = nullptr;
 
   void Dump() const override
   {
-    cout << "StmtAST { return ";
+    cout << "MatchStmtAST { return ";
     if (exp != nullptr)
       exp->Dump();
     cout << " }";
@@ -229,8 +269,8 @@ public:
   }
 };
 
-// Stmt - l_val "=" exp ";"
-class StmtAST_2 : public BaseAST
+// MatchStmt - l_val "=" exp ";"
+class MatchStmtAST_2 : public BaseAST
 {
 public:
   unique_ptr<BaseAST> l_val;
@@ -238,7 +278,7 @@ public:
 
   void Dump() const override
   {
-    cout << "StmtAST { ";
+    cout << "MatchStmtAST { ";
     l_val->Dump();
     cout << "=";
     exp->Dump();
@@ -269,8 +309,8 @@ public:
   }
 };
 
-// Stmt - [exp] ";"
-class StmtAST_3 : public BaseAST
+// MatchStmt - [exp] ";"
+class MatchStmtAST_3 : public BaseAST
 {
 public:
   unique_ptr<BaseAST> exp = nullptr;
@@ -279,7 +319,7 @@ public:
   {
     if (exp != nullptr)
     {
-      cout << "StmtAST { ";
+      cout << "MatchStmtAST { ";
       exp->Dump();
       cout << " }";
     }
@@ -294,15 +334,15 @@ public:
   }
 };
 
-// Stmt - block
-class StmtAST_4 : public BaseAST
+// MatchStmt - block
+class MatchStmtAST_4 : public BaseAST
 {
 public:
   unique_ptr<BaseAST> block;
 
   void Dump() const override
   {
-    cout << "StmtAST { ";
+    cout << "MatchStmtAST { ";
     block->Dump();
     cout << " }";
   }
@@ -310,6 +350,84 @@ public:
   void printIR(string &out) override
   {
     block->printIR(out);
+  }
+};
+
+// MatchStmt - "if" "(" exp ")" match_stmt "else" match_stmt
+class MatchStmtAST_5 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> exp;
+  unique_ptr<BaseAST> match_stmt_if;
+  unique_ptr<BaseAST> match_stmt_else;
+
+  void Dump() const override
+  {
+    cout << "MatchStmtAST { ";
+    cout << "if( ";
+    exp->Dump();
+    cout << " ){ ";
+    match_stmt_if->Dump();
+    cout << " }else{ ";
+    match_stmt_else->Dump();
+    cout << " } ";
+    cout << " }";
+  }
+
+  void printIR(string &out) override
+  {
+    // TODO
+  }
+};
+
+// UnMatchStmt - "if" "(" exp ")" stmt
+class UnMatchStmtAST_1 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> exp;
+  unique_ptr<BaseAST> stmt;
+
+  void Dump() const override
+  {
+    cout << "UnMatchStmtAST { ";
+    cout << "if( ";
+    exp->Dump();
+    cout << " ){ ";
+    stmt->Dump();
+    cout << " } ";
+    cout << " }";
+  }
+
+  void printIR(string &out) override
+  {
+    // TODO
+  }
+};
+
+// UnMatchStmt - "if" "(" exp ")" match_stmt "else" unmatch_stmt
+class UnMatchStmtAST_2 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> exp;
+  unique_ptr<BaseAST> match_stmt;
+  unique_ptr<BaseAST> unmatch_stmt;
+
+  void Dump() const override
+  {
+    cout << "UnMatchStmtAST { ";
+    cout << "if( ";
+    exp->Dump();
+    cout << " ){ ";
+    match_stmt->Dump();
+    cout << " }else{ ";
+    unmatch_stmt->Dump();
+    cout << " }";
+    cout << " }";
+  }
+
+  void printIR(string &out) override
+  {
+    // TODO
   }
 };
 
