@@ -13,6 +13,11 @@ using namespace std;
 static int count_block = 0;
 static int count_if = 0;
 
+// 为了break和continue知道自己要跳到哪里
+extern deque<int> now_in_while;
+
+static int count_break_continue = 0;
+
 /**
  * count_var给我新建的临时变量计数并命名
  *  - 相应的非终结符AST中包含自己的名字name就是用这个命名
@@ -396,18 +401,16 @@ public:
       if (exp->val)
       {
         match_stmt_if->printIR(out);
-        name = match_stmt_if->name;
+        if (match_stmt_if->name != "ret")
+          out += "jump %const_end_" + to_string(if_else_id) + "\n";
       }
       else
       {
         match_stmt_else->printIR(out);
-        name = match_stmt_else->name;
+        if (match_stmt_else->name != "ret")
+          out += "jump %const_end_" + to_string(if_else_id) + "\n";
       }
-      if (name != "ret")
-      {
-        out += "jump %const_end_" + to_string(if_else_id) + "\n";
-        out += "\n%const_end_" + to_string(if_else_id) + ":\n";
-      }
+      out += "\n%const_end_" + to_string(if_else_id) + ":\n";
     }
     else
     {
@@ -430,13 +433,113 @@ public:
       if (match_stmt_else->name != "ret")
         out += "jump %end_" + to_string(if_else_id) + "\n";
 
-      if (match_stmt_if->name == "ret" && match_stmt_else->name == "ret")
-        name = "ret";
+      out += "\n%end_" + to_string(if_else_id) + ":\n";
+    }
+  }
+};
+
+// MatchStmt - "while" "(" exp ")" stmt
+class MatchStmtAST_6 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> exp;
+  unique_ptr<BaseAST> stmt;
+
+  void Dump() const override
+  {
+    cout << "MatchStmtAST { ";
+    cout << "while( ";
+    exp->Dump();
+    cout << " ){ ";
+    stmt->Dump();
+    cout << " } ";
+    cout << " }";
+  }
+
+  void printIR(string &out) override
+  {
+    int while_id = count_if;
+    count_if++;
+
+    now_in_while.push_back(while_id);
+
+    exp->printIR(out);
+    if (exp->name == "#")
+    {
+      if (!exp->val)
+      {
+        // while(0)
+        // 无事发生
+        now_in_while.pop_back();
+        return;
+      }
       else
       {
-        out += "\n%end_" + to_string(if_else_id) + ":\n";
+        // while(1)
+        out += "br 1, %while_body_" + to_string(while_id) + ", %while_end_" + to_string(while_id) + "\n";
+        out += "\n%while_entry_" + to_string(while_id) + ":\n";
+        out += "br 1, %while_body_" + to_string(while_id) + ", %while_end_" + to_string(while_id) + "\n";
+        out += "\n%while_body_" + to_string(while_id) + ":\n";
+        stmt->printIR(out);
+        if (stmt->name != "ret")
+          out += "jump %while_entry_" + to_string(while_id) + "\n";
+        out += "\n%while_end_" + to_string(while_id) + ":\n";
+        now_in_while.pop_back();
+        return;
       }
     }
+    else
+    {
+      out += "br " + exp->name + ", " + "%while_body_" + to_string(while_id) + ", %while_end_" + to_string(while_id) + "\n";
+      out += "\n%while_entry_" + to_string(while_id) + ":\n";
+      exp->printIR(out);
+      out += "br " + exp->name + ", " + "%while_body_" + to_string(while_id) + ", %while_end_" + to_string(while_id) + "\n";
+      out += "\n%while_body_" + to_string(while_id) + ":\n";
+      stmt->printIR(out);
+      if (stmt->name != "ret")
+        out += "jump %while_entry_" + to_string(while_id) + "\n";
+      out += "\n%while_end_" + to_string(while_id) + ":\n";
+      now_in_while.pop_back();
+      return;
+    }
+  }
+};
+
+// MatchStmt - "break;"
+class MatchStmtAST_7 : public BaseAST
+{
+public:
+  void Dump() const override
+  {
+    cout << "MatchStmtAST { ";
+    cout << "break;";
+    cout << " }";
+  }
+
+  void printIR(string &out) override
+  {
+    out += "jump %while_end_" + to_string(now_in_while.back()) + "\n";
+    out += "\n%while_body_" + to_string(now_in_while.back()) + "_" + to_string(count_break_continue) + ":\n";
+    count_break_continue++;
+  }
+};
+
+// MatchStmt - "continue;"
+class MatchStmtAST_8 : public BaseAST
+{
+public:
+  void Dump() const override
+  {
+    cout << "MatchStmtAST { ";
+    cout << "continue;";
+    cout << " }";
+  }
+
+  void printIR(string &out) override
+  {
+    out += "jump %while_entry_" + to_string(now_in_while.back()) + "\n";
+    out += "\n%while_body_" + to_string(now_in_while.back()) + "_" + to_string(count_break_continue) + ":\n";
+    count_break_continue++;
   }
 };
 
@@ -472,13 +575,12 @@ public:
       if (exp->val)
       {
         stmt->printIR(out);
-        name = stmt->name;
+        if (stmt->name != "ret")
+        {
+          out += "jump %const_end_" + to_string(if_else_id) + "\n";
+        }
       }
-      if (name != "ret")
-      {
-        out += "jump %const_end_" + to_string(if_else_id) + "\n";
-        out += "\n%const_end_" + to_string(if_else_id) + ":\n";
-      }
+      out += "\n%const_end_" + to_string(if_else_id) + ":\n";
     }
     else
     {
@@ -536,18 +638,20 @@ public:
       if (exp->val)
       {
         match_stmt->printIR(out);
-        name = match_stmt->name;
+        if (match_stmt->name != "ret")
+        {
+          out += "jump %const_end_" + to_string(if_else_id) + "\n";
+        }
       }
       else
       {
         unmatch_stmt->printIR(out);
-        name = unmatch_stmt->name;
+        if (unmatch_stmt->name != "ret")
+        {
+          out += "jump %const_end_" + to_string(if_else_id) + "\n";
+        }
       }
-      if (name != "ret")
-      {
-        out += "jump %const_end_" + to_string(if_else_id) + "\n";
-        out += "\n%const_end_" + to_string(if_else_id) + ":\n";
-      }
+      out += "\n%const_end_" + to_string(if_else_id) + ":\n";
     }
     else
     {
@@ -570,13 +674,8 @@ public:
       if (unmatch_stmt->name != "ret")
         out += "jump %end_" + to_string(if_else_id) + "\n";
 
-      if (match_stmt->name == "ret" && unmatch_stmt->name == "ret")
-        name = "ret";
-      else
-      {
-        out += "\n%end_" + to_string(if_else_id);
-        out += ":\n";
-      }
+      out += "\n%end_" + to_string(if_else_id);
+      out += ":\n";
     }
   }
 };
@@ -1340,7 +1439,7 @@ public:
     cout << "||";
     land_exp->Dump();
   }
-  
+
   void printIR(string &out) override
   {
     lor_exp->printIR(out);

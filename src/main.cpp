@@ -20,6 +20,7 @@ extern int yyparse(unique_ptr<BaseAST> &ast);
 FILE *out_file;
 map<string, VarUnion> var_map;
 Multi_Var_Map *top_var_map = new Multi_Var_Map;
+deque<int> now_in_while;
 
 int main(int argc, const char *argv[])
 {

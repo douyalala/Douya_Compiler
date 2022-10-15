@@ -1,9 +1,5 @@
-int main()
-{
-  int a = 1, b = 0;
-  return b && a;
-  return b && 0;
-  return b || a;
-  return b || 0;
-  return 77;
+int main() {
+  if (0) return 1;
+  else return 2;
+  return 3;
 }

@@ -9,7 +9,9 @@ cmd_lines = ["autotest -koopa -s lv1 /root/compiler",
              "autotest -koopa -s lv5 /root/compiler",
              "autotest -riscv -s lv5 /root/compiler",
              "autotest -koopa -s lv6 /root/compiler",
-             "autotest -riscv -s lv6 /root/compiler"]
+             "autotest -riscv -s lv6 /root/compiler",
+             "autotest -koopa -s lv7 /root/compiler",
+             "autotest -riscv -s lv7 /root/compiler"]
 for cmd_line in cmd_lines:
     count = count+1
     os.system(cmd_line)
