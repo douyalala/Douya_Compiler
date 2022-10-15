@@ -1236,51 +1236,69 @@ public:
   void printIR(string &out) override
   {
     land_exp->printIR(out);
-    eq_exp->printIR(out);
-
-    //计算常量
-    if (land_exp->name == "#" && eq_exp->name == "#")
-    {
-      name = "#";
-      val = ((land_exp->val) && (eq_exp->val));
-      return;
-    }
-
-    // KoppaIR里面貌似只有按位与and，所以先让两边和0比一下一不一样（变成0或1）
-
-    string tmp_name_1 = "%" + to_string(count_var);
-    out += tmp_name_1.c_str();
-
-    out += " = ne ";
 
     if (land_exp->name == "#")
-      out += (to_string(land_exp->val)).c_str();
+    {
+      if (!land_exp->val)
+      {
+        name = "#";
+        val = 0;
+        return;
+      }
+      else
+      {
+        eq_exp->printIR(out);
+        if (eq_exp->name == "#")
+        {
+          name = "#";
+          val = (eq_exp->val != 0);
+          return;
+        }
+        else
+        {
+          name = "%" + to_string(count_var);
+          count_var++;
+          out += name + " = ne 0, " + eq_exp->name + "\n";
+          return;
+        }
+      }
+    }
     else
-      out += (land_exp->name).c_str();
-    out += ", 0\n";
-    count_var++;
+    {
+      string tmp_var_name = "%" + to_string(count_var);
+      count_var++;
 
-    string tmp_name_2 = "%" + to_string(count_var);
-    out += tmp_name_2.c_str();
+      int if_else_id = count_if;
+      count_if++;
 
-    out += " = ne ";
+      out += tmp_var_name + " = alloc i32\n";
+      out += "br " + land_exp->name + ", %if_" + to_string(if_else_id) + ", %else_" + to_string(if_else_id) + "\n";
 
-    if (eq_exp->name == "#")
-      out += (to_string(eq_exp->val)).c_str();
-    else
-      out += (eq_exp->name).c_str();
-    out += ", 0\n";
-    count_var++;
+      out += "\n%if_" + to_string(if_else_id) + ":\n";
+      eq_exp->printIR(out);
+      if (eq_exp->name == "#")
+      {
+        out += "store " + to_string((eq_exp->val) != 0) + ", " + tmp_var_name + "\n";
+      }
+      else
+      {
+        string tmp_name = "%" + to_string(count_var);
+        count_var++;
+        out += tmp_name + " = ne 0, " + eq_exp->name + "\n";
+        out += "store " + tmp_name + ", " + tmp_var_name + "\n";
+      }
+      out += "jump %end_" + to_string(if_else_id) + "\n";
 
-    name = "%" + to_string(count_var);
-    out += name.c_str();
+      out += "\n%else_" + to_string(if_else_id) + ":\n";
+      out += "store 0, " + tmp_var_name + "\n";
+      out += "jump %end_" + to_string(if_else_id) + "\n";
 
-    out += " = and ";
-    out += tmp_name_1.c_str();
-    out += ", ";
-    out += tmp_name_2.c_str();
-    out += "\n";
-    count_var++;
+      out += "\n%end_" + to_string(if_else_id) + ":\n";
+
+      name = "%" + to_string(count_var);
+      count_var++;
+      out += name + " = load " + tmp_var_name + "\n";
+    }
   }
 };
 
@@ -1322,54 +1340,71 @@ public:
     cout << "||";
     land_exp->Dump();
   }
+  
   void printIR(string &out) override
   {
     lor_exp->printIR(out);
-    land_exp->printIR(out);
-
-    //计算常量
-    if (lor_exp->name == "#" && land_exp->name == "#")
-    {
-      name = "#";
-      val = ((lor_exp->val) || (land_exp->val));
-      return;
-    }
-
-    // KoppaIR里面也只有按位或or，所以先让两边和0比一下一不一样（变成0或1）
-
-    string tmp_name_1 = "%" + to_string(count_var);
-    out += tmp_name_1.c_str();
-
-    out += " = ne ";
 
     if (lor_exp->name == "#")
-      out += (to_string(lor_exp->val)).c_str();
+    {
+      if (lor_exp->val)
+      {
+        name = "#";
+        val = 1;
+        return;
+      }
+      else
+      {
+        land_exp->printIR(out);
+        if (land_exp->name == "#")
+        {
+          name = "#";
+          val = (land_exp->val != 0);
+          return;
+        }
+        else
+        {
+          name = "%" + to_string(count_var);
+          count_var++;
+          out += name + " = ne 0, " + land_exp->name + "\n";
+          return;
+        }
+      }
+    }
     else
-      out += (lor_exp->name).c_str();
-    out += ", 0\n";
-    count_var++;
+    {
+      string tmp_var_name = "%" + to_string(count_var);
+      count_var++;
 
-    string tmp_name_2 = "%" + to_string(count_var);
-    out += tmp_name_2.c_str();
+      int if_else_id = count_if;
+      count_if++;
 
-    out += " = ne ";
+      out += tmp_var_name + " = alloc i32\n";
 
-    if (land_exp->name == "#")
-      out += (to_string(land_exp->val)).c_str();
-    else
-      out += (land_exp->name).c_str();
-    out += ", 0\n";
-    count_var++;
+      out += "br " + lor_exp->name + ", %if_" + to_string(if_else_id) + ", %else_" + to_string(if_else_id) + "\n";
+      out += "\n%if_" + to_string(if_else_id) + ":\n";
+      out += "store 1, " + tmp_var_name + "\n";
+      out += "jump %end_" + to_string(if_else_id) + "\n";
+      out += "\n%else_" + to_string(if_else_id) + ":\n";
+      land_exp->printIR(out);
+      if (land_exp->name == "#")
+      {
+        out += "store " + to_string((land_exp->val) != 0) + ", " + tmp_var_name + "\n";
+      }
+      else
+      {
+        string tmp_name = "%" + to_string(count_var);
+        count_var++;
+        out += tmp_name + " = ne 0, " + land_exp->name + "\n";
+        out += "store " + tmp_name + ", " + tmp_var_name + "\n";
+      }
+      out += "jump %end_" + to_string(if_else_id) + "\n";
+      out += "\n%end_" + to_string(if_else_id) + ":\n";
 
-    name = "%" + to_string(count_var);
-    out += name.c_str();
-
-    out += " = or ";
-    out += tmp_name_1.c_str();
-    out += ", ";
-    out += tmp_name_2.c_str();
-    out += "\n";
-    count_var++;
+      name = "%" + to_string(count_var);
+      count_var++;
+      out += name + " = load " + tmp_var_name + "\n";
+    }
   }
 };
 

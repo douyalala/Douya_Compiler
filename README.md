@@ -13,3 +13,13 @@ python3 make_run.py -r/k
 ```sh
 python3 test_old.py
 ```
+
+## 当前进度
+
+Lv6.1结束
+Lv6即以前的本地测试全部PASS
+TODO List：
+- Lv6.2 短路求值
+- Lv7 While
+- Lv8 函数和全局变量
+- Lv9 数组

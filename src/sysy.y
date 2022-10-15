@@ -439,14 +439,14 @@ VarDecl
   : BType VarDef VarDef_list ';' {
     auto ast = new VarDeclAST();
     ast->b_type="int";
-    ($3)->push_back(unique_ptr<BaseAST>($2));
+    ($3)->insert(($3)->begin(),unique_ptr<BaseAST>($2));
     ast->var_defs=($3);
     $$ = ast;
   }
 
 VarDef_list
   : ',' VarDef VarDef_list {
-    ($3)->push_back(unique_ptr<BaseAST>($2));
+    ($3)->insert(($3)->begin(),unique_ptr<BaseAST>($2));
     $$ = ($3);
   }
   | {

@@ -116,7 +116,6 @@ int Find_stack()
         {
             now_stack_frame.at(i) = 1;
             stack_frame.push_back(now_stack_frame);
-            // TODO：这可能不太对劲
             // 用到的时候应该是sp+i*4
             return i * 4;
         }
@@ -621,11 +620,11 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
     mem_map_stack.insert(make_pair(super_value, stack_pos));
 }
 
-// 访问指令-global_alloc
-void Visit(const koopa_raw_global_alloc_t &global_allocInst, const koopa_raw_value_t &super_value)
-{
-    // TODO
-}
+// // 访问指令-global_alloc
+// void Visit(const koopa_raw_global_alloc_t &global_allocInst, const koopa_raw_value_t &super_value)
+// {
+//
+// }
 
 // 访问指令-alloc
 void Visit_alloc(const koopa_raw_value_t &super_value)

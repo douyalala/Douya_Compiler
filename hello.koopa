@@ -1,87 +1,24 @@
-.text
-.globl main
-main:
-addi sp, sp, -64
+fun @main():i32{
+%entry:
+@a_1 = alloc i32
+store 1, @a_1
+@b_1 = alloc i32
+store 0, @b_1
+%0 = load @b_1
+%1 = alloc i32
+br %0, %if_0, %else_0
 
-li t0, 10
-sw t0, 0(sp)
-lw t0, 0(sp)
-li t1, 1
-sgt t0, t0, t1
-sw t0, 4(sp)
-lw t0, 4(sp)
-bnez t0, if_0
-j else_0
+%if_0:
+%2 = load @a_1
+%3 = ne 0, %2
+store %3, %1
+jump %end_0
 
-if_0:
-lw t0, 0(sp)
-li t1, 2
-sgt t0, t0, t1
-sw t0, 8(sp)
-lw t0, 8(sp)
-bnez t0, if_1
-j else_1
+%else_0:
+store 0, %1
+jump %end_0
 
-if_1:
-lw t0, 0(sp)
-li t1, 3
-slt t0, t0, t1
-sw t0, 12(sp)
-lw t0, 12(sp)
-bnez t0, if_2
-j else_2
-
-if_2:
-lw a0, 0(sp)
-addi sp, sp, 64
-ret
-
-else_2:
-lw t0, 0(sp)
-li t1, 4
-sgt t0, t0, t1
-sw t0, 16(sp)
-lw t0, 16(sp)
-bnez t0, if_3
-j else_3
-
-if_3:
-lw t0, 0(sp)
-li t1, 5
-slt t0, t0, t1
-sw t0, 20(sp)
-lw t0, 20(sp)
-bnez t0, if_4
-j else_4
-
-if_4:
-lw t0, 0(sp)
-li t1, 1
-add t0, t0, t1
-sw t0, 24(sp)
-lw a0, 24(sp)
-addi sp, sp, 64
-ret
-
-else_4:
-lw t0, 0(sp)
-li t1, 2
-add t0, t0, t1
-sw t0, 28(sp)
-lw a0, 28(sp)
-addi sp, sp, 64
-ret
-
-else_3:
-j jump_0
-
-jump_0:
-j else_1
-
-else_1:
-j else_0
-
-else_0:
-li a0, -1
-addi sp, sp, 64
-ret
+%end_0:
+%4 = load %1
+ret %4
+ } 
