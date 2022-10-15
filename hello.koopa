@@ -1,54 +1,87 @@
-fun @main():i32{
-%entry:
-@a_1 = alloc i32
-store 10, @a_1
-%0 = load @a_1
-%1 = gt %0, 1
-br %1, %if_0, %end_0
+.text
+.globl main
+main:
+addi sp, sp, -64
 
-%if_0:
-%2 = load @a_1
-%3 = gt %2, 2
-br %3, %if_1, %end_1
+li t0, 10
+sw t0, 0(sp)
+lw t0, 0(sp)
+li t1, 1
+sgt t0, t0, t1
+sw t0, 4(sp)
+lw t0, 4(sp)
+bnez t0, if_0
+j else_0
 
-%if_1:
-%4 = load @a_1
-%5 = lt %4, 3
-br %5, %if_2, %else_2
+if_0:
+lw t0, 0(sp)
+li t1, 2
+sgt t0, t0, t1
+sw t0, 8(sp)
+lw t0, 8(sp)
+bnez t0, if_1
+j else_1
 
-%if_2:
-%6 = load @a_1
-ret %6
+if_1:
+lw t0, 0(sp)
+li t1, 3
+slt t0, t0, t1
+sw t0, 12(sp)
+lw t0, 12(sp)
+bnez t0, if_2
+j else_2
 
-%else_2:
-%7 = load @a_1
-%8 = gt %7, 4
-br %8, %if_3, %end_3
+if_2:
+lw a0, 0(sp)
+addi sp, sp, 64
+ret
 
-%if_3:
-%9 = load @a_1
-%10 = lt %9, 5
-br %10, %if_4, %else_4
+else_2:
+lw t0, 0(sp)
+li t1, 4
+sgt t0, t0, t1
+sw t0, 16(sp)
+lw t0, 16(sp)
+bnez t0, if_3
+j else_3
 
-%if_4:
-%11 = load @a_1
-%12 = add %11, 1
-ret %12
+if_3:
+lw t0, 0(sp)
+li t1, 5
+slt t0, t0, t1
+sw t0, 20(sp)
+lw t0, 20(sp)
+bnez t0, if_4
+j else_4
 
-%else_4:
-%13 = load @a_1
-%14 = add %13, 2
-ret %14
+if_4:
+lw t0, 0(sp)
+li t1, 1
+add t0, t0, t1
+sw t0, 24(sp)
+lw a0, 24(sp)
+addi sp, sp, 64
+ret
 
-%end_3:
-jump %end_2
+else_4:
+lw t0, 0(sp)
+li t1, 2
+add t0, t0, t1
+sw t0, 28(sp)
+lw a0, 28(sp)
+addi sp, sp, 64
+ret
 
-%end_2:
-jump %end_1
+else_3:
+j jump_0
 
-%end_1:
-jump %end_0
+jump_0:
+j else_1
 
-%end_0:
-ret -1
- } 
+else_1:
+j else_0
+
+else_0:
+li a0, -1
+addi sp, sp, 64
+ret

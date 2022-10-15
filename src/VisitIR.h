@@ -4,6 +4,7 @@
 #include <cstring>
 #include <string>
 #include <map>
+#include <set>
 #include <deque>
 #include <vector>
 #include "koopa.h"
@@ -20,19 +21,33 @@ deque<vector<bool>> stack_frame;
 map<koopa_raw_value_t, string> mem_map_reg;
 map<koopa_raw_value_t, int> mem_map_stack;
 
+// 用于为if分支相关基本块计数并命名
+int count_if_else = 0;
+
+// 用于为jump相关基本块计数并命名
+int count_jump_Label = 0;
+
+// 基本块和Label的对应关系
+map<koopa_raw_basic_block_t, string> mem_map_block;
+
 // 用于计数部分的临时栈帧使用情况和临时符号表
 // 暂时没发现寄存器部分使用原版会出什么问题，所以没有单开临时寄存器数组
 vector<bool> stack_frame_count;
 map<koopa_raw_value_t, string> count_mem_map_reg;
 map<koopa_raw_value_t, int> count_mem_map_stack;
+set<koopa_raw_basic_block_t> count_mem_map_block;
 
+// 记录函数调用的时候保存的寄存器
 deque<deque<string>> save_reg;
+
+//记录函数开的栈的大小
 deque<int> save_stack_size;
 
 // 函数声明
 void Visit(const koopa_raw_program_t &program);
 void Visit(const koopa_raw_function_t &func);
 void Visit(const koopa_raw_basic_block_t &bb);
+void Visit(const koopa_raw_basic_block_t &bb, string Label);
 void Visit(const koopa_raw_value_t &value);
 void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_value);
 void Visit(const koopa_raw_integer_t &intInst, const koopa_raw_value_t &super_value);
@@ -41,6 +56,8 @@ void Visit(const koopa_raw_global_alloc_t &global_allocInst, const koopa_raw_val
 void Visit_alloc(const koopa_raw_value_t &super_value);
 void Visit(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_value);
 void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_value);
+void Visit(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_value);
+void Visit(const koopa_raw_jump_t &jumpInst, const koopa_raw_value_t &super_value);
 void Count_var(const koopa_raw_basic_block_t &bb);
 void Count_var(const koopa_raw_value_t &value);
 void Count_var(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_value);
@@ -49,6 +66,8 @@ void Count_var(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &su
 void Count_var_alloc(const koopa_raw_value_t &super_value);
 void Count_var(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_value);
 void Count_var(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_value);
+void Count_var(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_value);
+void Count_var(const koopa_raw_jump_t &jumpInst, const koopa_raw_value_t &super_value);
 
 void Visit(const koopa_raw_slice_t &slice);
 
@@ -159,10 +178,9 @@ void Push_reg()
     }
 }
 
-// 还原寄存器
+// 真的还原寄存器
 void Pop_reg()
 {
-    int stack_size = save_stack_size.back();
     deque<string> tmp = save_reg.back();
     save_reg.pop_back();
     int reg_n = tmp.size();
@@ -173,6 +191,18 @@ void Pop_reg()
             a[(reg_name[1] - '0')] = 1;
         else
             t[(reg_name[1] - '0')] = 1;
+    }
+}
+
+// 还原寄存器-print
+void Pop_reg_print()
+{
+    int stack_size = save_stack_size.back();
+    deque<string> tmp = save_reg.back();
+    int reg_n = tmp.size();
+    for (int i = 0; i < reg_n; i++)
+    {
+        string reg_name = tmp.at(i);
         int pian_yi = stack_size - (i + 1) * 4;
         cout << "lw " << reg_name << ", " << pian_yi << "(sp)" << endl;
     }
@@ -233,6 +263,7 @@ void Visit(const koopa_raw_function_t &func)
     count_mem_map_reg.clear();
     count_mem_map_stack.clear();
     stack_frame_count.clear();
+    count_mem_map_block.clear();
 
     // 计算所有基本块用到的变量
     for (size_t i = 0; i < func->bbs.len; ++i)
@@ -282,8 +313,15 @@ void Visit(const koopa_raw_function_t &func)
     {
         assert(func->bbs.kind == KOOPA_RSIK_BASIC_BLOCK);
         koopa_raw_basic_block_t bb = (koopa_raw_basic_block_t)func->bbs.buffer[i];
-        Visit(bb);
+        if (!mem_map_block.count(bb))
+            Visit(bb);
     }
+
+    // 真的解放保存的寄存器
+    Pop_reg();
+
+    // 栈大小不需要了，pop掉
+    save_stack_size.pop_back();
 
     // 把栈帧记录表pop掉
     stack_frame.pop_back();
@@ -304,6 +342,36 @@ void Visit(const koopa_raw_basic_block_t &bb)
 
     // 执行一些其他的必要操作
     // ...
+
+    cout << endl;
+
+    // 访问所有指令
+    for (size_t i = 0; i < bb->insts.len; ++i)
+    {
+        assert(bb->insts.kind == KOOPA_RSIK_VALUE);
+        koopa_raw_value_t inst = (koopa_raw_value_t)bb->insts.buffer[i];
+        Visit(inst);
+    }
+}
+
+// 访问基本块 并创建Label
+void Visit(const koopa_raw_basic_block_t &bb, string Label)
+{
+    // koopa_raw_basic_block_data_t
+    /// Name of basic block, null if no name.
+    // const char *name;
+    /// Parameters.
+    // koopa_raw_slice_t params;
+    /// Values that this basic block is used by.
+    // koopa_raw_slice_t used_by;
+    /// Instructions in this basic block.
+    // koopa_raw_slice_t insts;
+
+    // 执行一些其他的必要操作
+    // ...
+
+    cout << endl
+         << Label << ":\n";
 
     // 访问所有指令
     for (size_t i = 0; i < bb->insts.len; ++i)
@@ -358,6 +426,14 @@ void Visit(const koopa_raw_value_t &value)
         // 访问 store 指令
         Visit(kind.data.store, value);
         break;
+    case KOOPA_RVT_BRANCH:
+        // 访问 br 指令
+        Visit(kind.data.branch, value);
+        break;
+    case KOOPA_RVT_JUMP:
+        // 访问 jump 指令
+        Visit(kind.data.jump, value);
+        break;
     default:
         // 其他类型暂时遇不到
         assert(false);
@@ -395,10 +471,9 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
     }
 
     // 返回之前，解放保存的寄存器
-    Pop_reg();
+    Pop_reg_print();
     // 把sp挪回去
     int stack_size = save_stack_size.back();
-    save_stack_size.pop_back();
     if (stack_size != 0)
     {
         if (stack_size >= -2048 && stack_size <= 2047)
@@ -609,6 +684,107 @@ void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_va
     cout << "sw " << value_reg << ", " << mem_map_stack.find(storeInst.dest)->second << "(sp)" << endl;
 }
 
+// 访问指令-br
+void Visit(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_value)
+{
+    // typedef struct {
+    //   /// Condition.
+    //   koopa_raw_value_t cond;
+    //   /// Target if condition is `true`.
+    //   koopa_raw_basic_block_t true_bb;
+    //   /// Target if condition is `false`.
+    //   koopa_raw_basic_block_t false_bb;
+    //   /// Arguments of `true` target..
+    //   koopa_raw_slice_t true_args;
+    //   /// Arguments of `false` target..
+    //   koopa_raw_slice_t false_args;
+    // } koopa_raw_branch_t;
+
+    int if_else_id = count_if_else;
+    count_if_else++;
+
+    string br_cond;
+
+    if (!(mem_map_reg.count(brInst.cond) || mem_map_stack.count(brInst.cond)))
+        Visit(brInst.cond);
+    assert(mem_map_reg.count(brInst.cond) || mem_map_stack.count(brInst.cond));
+    if (mem_map_reg.count(brInst.cond))
+    {
+        br_cond = mem_map_reg.find(brInst.cond)->second;
+        mem_map_reg.erase(brInst.cond);
+    }
+    if (mem_map_stack.count(brInst.cond))
+    {
+        int br_cond_pos = mem_map_stack.find(brInst.cond)->second;
+        br_cond = Find_reg();
+        cout << "lw " << br_cond << ", " << br_cond_pos << "(sp)" << endl;
+    }
+
+    Free_reg(br_cond);
+
+    string true_Label;
+    string false_Label;
+    bool new_true_bb = 0;
+    bool new_false_bb = 0;
+
+    if (!mem_map_block.count(brInst.true_bb))
+    {
+        true_Label = "if_" + to_string(if_else_id);
+        new_true_bb = 1;
+        mem_map_block.insert(make_pair(brInst.true_bb, true_Label));
+    }
+    else
+        true_Label = mem_map_block.find(brInst.true_bb)->second;
+
+    if (!mem_map_block.count(brInst.false_bb))
+    {
+        false_Label = "else_" + to_string(if_else_id);
+        new_false_bb = 1;
+        mem_map_block.insert(make_pair(brInst.false_bb, false_Label));
+    }
+    else
+        false_Label = mem_map_block.find(brInst.false_bb)->second;
+
+    cout << "bnez " << br_cond << ", " << true_Label << endl;
+    cout << "j " << false_Label << endl;
+
+    if (new_true_bb)
+        Visit(brInst.true_bb, true_Label);
+    if (new_false_bb)
+        Visit(brInst.false_bb, false_Label);
+}
+
+// 访问指令-jump
+void Visit(const koopa_raw_jump_t &jumpInst, const koopa_raw_value_t &super_value)
+{
+    // typedef struct {
+    //     /// Target.
+    //     koopa_raw_basic_block_t target;
+    //     /// Arguments of target..
+    //     koopa_raw_slice_t args;
+    // } koopa_raw_jump_t;
+
+    int jump_Label_id = count_jump_Label;
+    count_jump_Label++;
+
+    string target_Label;
+    bool new_jm_bb = 0;
+
+    if (!mem_map_block.count(jumpInst.target))
+    {
+        target_Label = "jump_" + to_string(jump_Label_id);
+        new_jm_bb = 1;
+        mem_map_block.insert(make_pair(jumpInst.target, target_Label));
+    }
+    else
+        target_Label = mem_map_block.find(jumpInst.target)->second;
+
+    cout << "j " << target_Label << endl;
+
+    if (new_jm_bb)
+        Visit(jumpInst.target, target_Label);
+}
+
 // 访问 raw slice
 void Visit(const koopa_raw_slice_t &slice)
 {
@@ -684,8 +860,17 @@ void Count_var(const koopa_raw_value_t &value)
         // 访问 store 指令
         Count_var(kind.data.store, value);
         break;
+    case KOOPA_RVT_BRANCH:
+        // 访问 br 指令
+        Count_var(kind.data.branch, value);
+        break;
+    case KOOPA_RVT_JUMP:
+        // 访问 jump 指令
+        Count_var(kind.data.jump, value);
+        break;
     default:
         // 其他类型暂时遇不到
+        cout << kind.tag << endl;
         assert(false);
     }
 }
@@ -782,4 +967,38 @@ void Count_var(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &supe
     if (!count_mem_map_stack.count(storeInst.dest))
         Count_var(storeInst.dest);
     assert(count_mem_map_stack.count(storeInst.dest));
+}
+
+// 访问指令-br
+void Count_var(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_value)
+{
+    // cond
+    if (!(count_mem_map_reg.count(brInst.cond) || count_mem_map_stack.count(brInst.cond)))
+        Count_var(brInst.cond);
+
+    //删掉cond
+    if (count_mem_map_reg.count(brInst.cond))
+    {
+        Free_reg(count_mem_map_reg.find(brInst.cond)->second);
+        count_mem_map_reg.erase(brInst.cond);
+    }
+
+    // true/false_bb
+    if (!count_mem_map_block.count(brInst.true_bb))
+    {
+        count_mem_map_block.insert(brInst.true_bb);
+        Count_var(brInst.true_bb);
+    }
+
+    if (!count_mem_map_block.count(brInst.false_bb))
+    {
+        count_mem_map_block.insert(brInst.false_bb);
+        Count_var(brInst.false_bb);
+    }
+}
+
+// 访问指令-jump
+void Count_var(const koopa_raw_jump_t &jumpInst, const koopa_raw_value_t &super_value)
+{
+    return;
 }
