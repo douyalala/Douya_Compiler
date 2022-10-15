@@ -11,6 +11,7 @@
 using namespace std;
 
 static int count_block = 0;
+static int count_if = 0;
 
 /**
  * count_var给我新建的临时变量计数并命名
@@ -128,9 +129,7 @@ public:
     out += func_type;
     out += "{\n";
 
-    // TODO：处理基本块的问题
-    out += "%block_entry";
-    out += ":\n";
+    out += "%entry:\n";
 
     block->printIR(out);
     out += " } ";
@@ -165,6 +164,11 @@ public:
     for (int i = 0; i < block_items->size(); i++)
     {
       block_items->at(i)->printIR(out);
+      if (block_items->at(i)->name == "ret")
+      {
+        name = "ret";
+        break;
+      }
     }
 
     top_var_map = top_var_map->outer_map;
@@ -187,6 +191,7 @@ public:
   void printIR(string &out) override
   {
     decl_or_stmt->printIR(out);
+    name = decl_or_stmt->name;
   }
 };
 
@@ -205,8 +210,8 @@ public:
 
   void printIR(string &out) override
   {
-    // TODO
     match_stmt->printIR(out);
+    name = match_stmt->name;
   }
 };
 
@@ -225,8 +230,8 @@ public:
 
   void printIR(string &out) override
   {
-    // TODO
     unmatch_stmt->printIR(out);
+    name = unmatch_stmt->name;
   }
 };
 
@@ -246,6 +251,7 @@ public:
 
   void printIR(string &out) override
   {
+    name = "ret";
     if (exp != nullptr)
     {
       exp->printIR(out);
@@ -350,6 +356,7 @@ public:
   void printIR(string &out) override
   {
     block->printIR(out);
+    name = block->name;
   }
 };
 
@@ -376,7 +383,60 @@ public:
 
   void printIR(string &out) override
   {
-    // TODO
+    int if_else_id = count_if;
+    count_if++;
+
+    exp->printIR(out);
+
+    if (exp->name == "#")
+    {
+      // 如果exp就是个常数，提前优化掉分支
+      out += "jump %const_if_" + to_string(if_else_id) + "\n";
+      out += "\n%const_if_" + to_string(if_else_id) + ":\n";
+      if (exp->val)
+      {
+        match_stmt_if->printIR(out);
+        name = match_stmt_if->name;
+      }
+      else
+      {
+        match_stmt_else->printIR(out);
+        name = match_stmt_else->name;
+      }
+      if (name != "ret")
+      {
+        out += "jump %const_end_" + to_string(if_else_id) + "\n";
+        out += "\n%const_end_" + to_string(if_else_id) + ":\n";
+      }
+    }
+    else
+    {
+      // exp 是一个%n 之类的
+      out += "br ";
+      out += exp->name;
+      out += ", %if_" + to_string(if_else_id);
+      out += ", %else_" + to_string(if_else_id);
+      out += "\n";
+
+      out += "\n%if_" + to_string(if_else_id);
+      out += ":\n";
+      match_stmt_if->printIR(out);
+      if (match_stmt_if->name != "ret")
+        out += "jump %end_" + to_string(if_else_id) + "\n";
+
+      out += "\n%else_" + to_string(if_else_id);
+      out += ":\n";
+      match_stmt_else->printIR(out);
+      if (match_stmt_else->name != "ret")
+        out += "jump %end_" + to_string(if_else_id) + "\n";
+
+      if (match_stmt_if->name == "ret" && match_stmt_else->name == "ret")
+        name = "ret";
+      else
+      {
+        out += "\n%end_" + to_string(if_else_id) + ":\n";
+      }
+    }
   }
 };
 
@@ -400,7 +460,44 @@ public:
 
   void printIR(string &out) override
   {
-    // TODO
+    int if_else_id = count_if;
+    count_if++;
+
+    exp->printIR(out);
+    if (exp->name == "#")
+    {
+      // 如果exp就是个常数，提前优化掉分支
+      out += "jump %const_if_" + to_string(if_else_id) + "\n";
+      out += "\n%const_if_" + to_string(if_else_id) + ":\n";
+      if (exp->val)
+      {
+        stmt->printIR(out);
+        name = stmt->name;
+      }
+      if (name != "ret")
+      {
+        out += "jump %const_end_" + to_string(if_else_id) + "\n";
+        out += "\n%const_end_" + to_string(if_else_id) + ":\n";
+      }
+    }
+    else
+    {
+      // exp 是一个%n 之类的
+      out += "br ";
+      out += exp->name;
+      out += ", %if_" + to_string(if_else_id);
+      out += ", %end_" + to_string(if_else_id);
+      out += "\n";
+
+      out += "\n%if_" + to_string(if_else_id);
+      out += ":\n";
+      stmt->printIR(out);
+      if (stmt->name != "ret")
+        out += "jump %end_" + to_string(if_else_id) + "\n";
+
+      out += "\n%end_" + to_string(if_else_id);
+      out += ":\n";
+    }
   }
 };
 
@@ -427,7 +524,60 @@ public:
 
   void printIR(string &out) override
   {
-    // TODO
+    int if_else_id = count_if;
+    count_if++;
+
+    exp->printIR(out);
+    if (exp->name == "#")
+    {
+      // 如果exp就是个常数，提前优化掉分支
+      out += "jump %const_if_" + to_string(if_else_id) + "\n";
+      out += "\n%const_if_" + to_string(if_else_id) + ":\n";
+      if (exp->val)
+      {
+        match_stmt->printIR(out);
+        name = match_stmt->name;
+      }
+      else
+      {
+        unmatch_stmt->printIR(out);
+        name = unmatch_stmt->name;
+      }
+      if (name != "ret")
+      {
+        out += "jump %const_end_" + to_string(if_else_id) + "\n";
+        out += "\n%const_end_" + to_string(if_else_id) + ":\n";
+      }
+    }
+    else
+    {
+      // exp 是一个%n 之类的
+      out += "br ";
+      out += exp->name;
+      out += ", %if_" + to_string(if_else_id);
+      out += ", %else_" + to_string(if_else_id);
+      out += "\n";
+
+      out += "\n%if_" + to_string(if_else_id);
+      out += ":\n";
+      match_stmt->printIR(out);
+      if (match_stmt->name != "ret")
+        out += "jump %end_" + to_string(if_else_id) + "\n";
+
+      out += "\n%else_" + to_string(if_else_id);
+      out += ":\n";
+      unmatch_stmt->printIR(out);
+      if (unmatch_stmt->name != "ret")
+        out += "jump %end_" + to_string(if_else_id) + "\n";
+
+      if (match_stmt->name == "ret" && unmatch_stmt->name == "ret")
+        name = "ret";
+      else
+      {
+        out += "\n%end_" + to_string(if_else_id);
+        out += ":\n";
+      }
+    }
   }
 };
 

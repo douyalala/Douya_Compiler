@@ -1,7 +1,14 @@
 int main() {
-  int a = 2;
-  if (a) {
-    a = a + 1;
-  } else a = 0;  // 在实际写 C/C++ 程序的时候别这样, 建议 if 的分支全部带大括号
-  return a;
+  int a = 10;
+  if (a > 1)
+    if (a > 2)
+      if (a < 3)
+        return a;
+      else
+        if (a > 4)
+          if (a < 5)
+            return a + 1;
+          else
+            return a + 2;
+  return -1;
 }
