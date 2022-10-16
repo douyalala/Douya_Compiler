@@ -1,5 +1,6 @@
 import os
-import sys;
+import sys
+
 mode=sys.argv[1]
 if(mode[1]=='r'):
     print("make and run mode: -riscv")

@@ -4,9 +4,11 @@
 #include <memory>
 #include <string>
 #include <cstring>
+#include <map>
+#include <set>
 #include "AST.h"
-#include "koopa.h"
 #include "VisitIR.h"
+#include "koopa.h"
 
 using namespace std;
 
@@ -18,12 +20,47 @@ using namespace std;
 extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 FILE *out_file;
+
+// 一些不知道为什么写了#pragma once 但还是会重定义的符号，只能extern然后定义在这里
 map<string, VarUnion> var_map;
-Multi_Var_Map *top_var_map = new Multi_Var_Map;
+Multi_Symbol_Map *top_symbol_map = new Multi_Symbol_Map;
+string tmp_b_type = "";
 deque<int> now_in_while;
+
+void add_sysy_func()
+{
+  string ident[] = {
+      "getint",
+      "getch",
+      "getarray",
+      "putint",
+      "putch",
+      "putarray",
+      "starttime",
+      "stoptime"};
+  string func_type[] = {
+      "i32",
+      "i32",
+      "i32",
+      "",
+      "",
+      "",
+      "",
+      ""};
+
+  for (int i = 0; i < 8; i++)
+  {
+    string name = "@" + ident[i];
+    VarUnion tmp_func;
+    tmp_func.kind = var_kind_FUNC;
+    tmp_func.type = func_type[i];
+    top_symbol_map->insert(name, tmp_func);
+  }
+}
 
 int main(int argc, const char *argv[])
 {
+  add_sysy_func();
   // 解析命令行参数. 测试脚本/评测平台要求你的编译器能接收如下参数:
   // compiler 模式 输入文件 -o 输出文件
   assert(argc == 5);
@@ -43,7 +80,7 @@ int main(int argc, const char *argv[])
   assert(!parse_ret);
 
   // //Dump输出调试
-  // ast->Dump();
+  ast->Dump();
 
   // AST 转换为 字符串 IR
   string IRstring = "";

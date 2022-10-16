@@ -41,45 +41,100 @@ using namespace std;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN LE GE EQ NE LAND LOR CONST IF ELSE WHILE CONTINUE BREAK
+%token INT RETURN LE GE EQ NE LAND LOR CONST IF ELSE WHILE CONTINUE BREAK VOID
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 
 // 非终结符的类型定义
-%type <ast_val> 
-FuncDef FuncType 
+%type <ast_val>
+CompUnit
+FuncDef FuncFParams FuncFParam FuncRParams
 Block BlockItem Stmt MatchStmt UnMatchStmt
 Exp PrimaryExp UnaryExp MulExp AddExp RelExp EqExp LAndExp LOrExp 
-Decl BType LVal
+Decl LVal
 ConstDecl ConstDef ConstInitVal ConstExp
 VarDecl VarDef InitVal
 %type <int_val> Number
-%type <str_val> UnaryOp
-%type <ast_list_val> BlockItem_list ConstDef_list VarDef_list
+%type <str_val> UnaryOp FuncType BType
+%type <ast_list_val> BlockItem_list ConstDef_list VarDef_list FuncFParams_list Exp_list
 
 %%
 
 // 这里写 Flex/Bison 的规则描述
 // 对于 Bison, 这里写的是 parser 遇到某种语法规则后做的操作
 
+ROOT
+  : CompUnit {
+    auto root = make_unique<ROOTAST>();
+    root->comp_unit = unique_ptr<BaseAST>($1);
+    ast = move(root);
+  }
+
 CompUnit 
   : FuncDef {
-    auto comp_unit = make_unique<CompUnitAST>();
-    comp_unit->func_def = unique_ptr<BaseAST>($1);
-    ast = move(comp_unit);
+    auto ast = new CompUnitAST();
+    ast->func_def = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | CompUnit FuncDef {
+    auto ast = new CompUnitAST();
+    ast->comp_unit = unique_ptr<BaseAST>($1);
+    ast->func_def = unique_ptr<BaseAST>($2);
+    $$ = ast;
   }
 
 FuncDef 
   : FuncType IDENT '(' ')' Block {
     auto ast = new FuncDefAST();
-    ast->func_type = "i32";
+    ast->func_type = *unique_ptr<string>($1);
     ast->ident = *unique_ptr<string>($2);
     ast->block = unique_ptr<BaseAST>($5);
     $$ = ast;
   }
+  | FuncType IDENT '(' FuncFParams ')' Block {
+    auto ast = new FuncDefAST();
+    ast->func_type = *unique_ptr<string>($1);
+    ast->ident = *unique_ptr<string>($2);
+    ast->func_f_params = unique_ptr<BaseAST>($4);
+    ast->block = unique_ptr<BaseAST>($6);
+    $$ = ast;
+  }
 
 FuncType 
-  : INT {}
+  : INT {
+    auto ty = new string("i32");
+    $$ = ty;
+  }
+  | VOID {
+    auto ty = new string("");
+    $$ = ty;
+  }
+
+FuncFParams
+  : FuncFParam FuncFParams_list {
+    auto ast = new FuncFParamsAST();
+    ($2)->insert(($2)->begin(),unique_ptr<BaseAST>($1));
+    ast->func_f_params = ($2);
+    $$ = ast;
+  }
+
+FuncFParams_list
+  : ',' FuncFParam FuncFParams_list {
+    ($3)->insert(($3)->begin(),unique_ptr<BaseAST>($2));
+    $$ = ($3);
+  }
+  | {
+    auto func_f_params = new vector<unique_ptr<BaseAST>>();
+    $$ = func_f_params;
+  }
+
+FuncFParam
+  : BType IDENT {
+    auto ast = new FuncFParamAST();
+    ast->b_type = *unique_ptr<string>($1) ; 
+    ast->ident = *unique_ptr<string>($2);
+    $$ = ast;
+  }
 
 Block 
   : '{' BlockItem_list '}' {
@@ -239,6 +294,35 @@ UnaryExp
     ast->unary_op = ($1)[0];
     ast->unary_exp = unique_ptr<BaseAST>($2);
     $$ = ast;
+  }
+  | IDENT '(' FuncRParams ')' {
+    auto ast = new UnaryExpAST_3();
+    ast->ident = *unique_ptr<string>($1);
+    ast->func_r_params = unique_ptr<BaseAST>($3);
+    $$ = ast;
+  }
+  | IDENT '(' ')' {
+    auto ast = new UnaryExpAST_3();
+    ast->ident = *unique_ptr<string>($1);
+    $$ = ast;
+  }
+
+FuncRParams
+  : Exp Exp_list {
+    auto ast = new FuncRParamsAST();
+    ($2)->insert(($2)->begin(),unique_ptr<BaseAST>($1));
+    ast->exps = ($2);
+    $$ = ast;
+  }
+
+Exp_list
+  : ',' Exp Exp_list {
+    ($3)->insert(($3)->begin(),unique_ptr<BaseAST>($2));
+    $$ = ($3);
+  }
+  | {
+    auto exps = new vector<unique_ptr<BaseAST>>();
+    $$ = exps;
   }
 
 UnaryOp
@@ -408,14 +492,17 @@ LVal
 ConstDecl
   : CONST BType ConstDef ConstDef_list ';' {
     auto ast = new ConstDeclAST();
-    ast->b_type="int";
+    ast->b_type="i32";
     ($4)->insert(($4)->begin(),unique_ptr<BaseAST>($3));
     ast->const_defs=($4);
     $$ = ast;
   }
 
 BType
-  : INT {}
+  : INT {
+    auto ty = new string("i32");
+    $$ = ty;
+  }
 
 ConstDef_list
   : ',' ConstDef ConstDef_list {
@@ -452,7 +539,7 @@ ConstExp
 VarDecl
   : BType VarDef VarDef_list ';' {
     auto ast = new VarDeclAST();
-    ast->b_type="int";
+    ast->b_type="i32";
     ($3)->insert(($3)->begin(),unique_ptr<BaseAST>($2));
     ast->var_defs=($3);
     $$ = ast;

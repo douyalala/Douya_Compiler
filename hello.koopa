@@ -1,10 +1,28 @@
-fun @main():i32{
+fun @fib(@n: i32): i32 {
 %entry:
-jump %const_if_0
+%n = alloc i32
+store @n, %n
+%0 = load %n
+%1 = lt %0, 2
+br %1, %if_0, %end_0
 
-%const_if_0:
-ret 2
+%if_0:
+%2 = load %n
+ret %2
 
-%const_end_0:
-ret 3
- } 
+%end_0:
+%3 = load %n
+%4 = sub %3, 1
+%5 = call @fib(%4)
+%6 = load %n
+%7 = sub %6, 2
+%8 = call @fib(%7)
+%9 = add %5, %8
+ret %9
+}
+
+fun @main(): i32 {
+%entry:
+%10 = call @fib(20)
+ret %10
+}

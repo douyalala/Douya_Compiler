@@ -1,5 +1,10 @@
+int fib(int n) {
+  if (n < 2) {
+    return n;
+  }
+  return fib(n - 1) + fib(n - 2);
+}
+
 int main() {
-  if (0) return 1;
-  else return 2;
-  return 3;
+  return fib(20);
 }
