@@ -55,7 +55,7 @@ Decl LVal
 ConstDecl ConstDef ConstInitVal ConstExp
 VarDecl VarDef InitVal
 %type <int_val> Number
-%type <str_val> UnaryOp FuncType BType
+%type <str_val> UnaryOp
 %type <ast_list_val> BlockItem_list ConstDef_list VarDef_list FuncFParams_list Exp_list
 
 %%
@@ -71,43 +71,61 @@ ROOT
   }
 
 CompUnit 
-  : FuncDef {
+  : Decl {
     auto ast = new CompUnitAST();
-    ast->func_def = unique_ptr<BaseAST>($1);
+    ast->func_def_or_decl = unique_ptr<BaseAST>($1);
+    $$ = ast;
+  }
+  | FuncDef {
+    auto ast = new CompUnitAST();
+    ast->func_def_or_decl = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
   | CompUnit FuncDef {
     auto ast = new CompUnitAST();
     ast->comp_unit = unique_ptr<BaseAST>($1);
-    ast->func_def = unique_ptr<BaseAST>($2);
+    ast->func_def_or_decl = unique_ptr<BaseAST>($2);
+    $$ = ast;
+  }
+  | CompUnit Decl {
+    auto ast = new CompUnitAST();
+    ast->comp_unit = unique_ptr<BaseAST>($1);
+    ast->func_def_or_decl = unique_ptr<BaseAST>($2);
     $$ = ast;
   }
 
+
+
 FuncDef 
-  : FuncType IDENT '(' ')' Block {
+  : INT IDENT '(' ')' Block {
     auto ast = new FuncDefAST();
-    ast->func_type = *unique_ptr<string>($1);
+    ast->func_type = "i32";
     ast->ident = *unique_ptr<string>($2);
     ast->block = unique_ptr<BaseAST>($5);
     $$ = ast;
   }
-  | FuncType IDENT '(' FuncFParams ')' Block {
+  | VOID IDENT '(' ')' Block {
     auto ast = new FuncDefAST();
-    ast->func_type = *unique_ptr<string>($1);
+    ast->func_type = "";
+    ast->ident = *unique_ptr<string>($2);
+    ast->block = unique_ptr<BaseAST>($5);
+    $$ = ast;
+  }
+  | INT IDENT '(' FuncFParams ')' Block {
+    auto ast = new FuncDefAST();
+    ast->func_type = "i32";
     ast->ident = *unique_ptr<string>($2);
     ast->func_f_params = unique_ptr<BaseAST>($4);
     ast->block = unique_ptr<BaseAST>($6);
     $$ = ast;
   }
-
-FuncType 
-  : INT {
-    auto ty = new string("i32");
-    $$ = ty;
-  }
-  | VOID {
-    auto ty = new string("");
-    $$ = ty;
+  | VOID IDENT '(' FuncFParams ')' Block {
+    auto ast = new FuncDefAST();
+    ast->func_type = "";
+    ast->ident = *unique_ptr<string>($2);
+    ast->func_f_params = unique_ptr<BaseAST>($4);
+    ast->block = unique_ptr<BaseAST>($6);
+    $$ = ast;
   }
 
 FuncFParams
@@ -129,9 +147,9 @@ FuncFParams_list
   }
 
 FuncFParam
-  : BType IDENT {
+  : INT IDENT {
     auto ast = new FuncFParamAST();
-    ast->b_type = *unique_ptr<string>($1) ; 
+    ast->b_type = "i32"; 
     ast->ident = *unique_ptr<string>($2);
     $$ = ast;
   }
@@ -490,18 +508,12 @@ LVal
   }
 
 ConstDecl
-  : CONST BType ConstDef ConstDef_list ';' {
+  : CONST INT ConstDef ConstDef_list ';' {
     auto ast = new ConstDeclAST();
     ast->b_type="i32";
     ($4)->insert(($4)->begin(),unique_ptr<BaseAST>($3));
     ast->const_defs=($4);
     $$ = ast;
-  }
-
-BType
-  : INT {
-    auto ty = new string("i32");
-    $$ = ty;
   }
 
 ConstDef_list
@@ -537,7 +549,7 @@ ConstExp
   }
 
 VarDecl
-  : BType VarDef VarDef_list ';' {
+  : INT VarDef VarDef_list ';' {
     auto ast = new VarDeclAST();
     ast->b_type="i32";
     ($3)->insert(($3)->begin(),unique_ptr<BaseAST>($2));

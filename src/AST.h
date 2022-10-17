@@ -81,7 +81,7 @@ class CompUnitAST : public BaseAST
 {
 public:
   unique_ptr<BaseAST> comp_unit = nullptr;
-  unique_ptr<BaseAST> func_def;
+  unique_ptr<BaseAST> func_def_or_decl;
 
   void Dump() const override
   {
@@ -89,20 +89,20 @@ public:
     if (comp_unit != nullptr)
       comp_unit->Dump();
     cout << "{";
-    func_def->Dump();
+    func_def_or_decl->Dump();
     cout << "}";
     cout << " }" << endl;
   }
 
   void printIR(string &out) override
   {
-    // TODO:
+
     if (comp_unit != nullptr)
     {
       comp_unit->printIR(out);
       out += "\n";
     }
-    func_def->printIR(out);
+    func_def_or_decl->printIR(out);
   }
 
   void list_the_param(string &out) override
@@ -143,7 +143,7 @@ public:
     top_symbol_map = new_top;
 
     count_block++;
-    // TODO
+
     out += "fun @";
     out += ident;
     out += "(";
@@ -196,7 +196,6 @@ public:
 
   void printIR(string &out) override
   {
-    // TODO
     for (int i = 0; i < func_f_params->size(); i++)
     {
       func_f_params->at(i)->printIR(out);
@@ -224,7 +223,6 @@ public:
 
   void printIR(string &out) override
   {
-    // TODO
     string param_name = "@" + ident;
     VarUnion param_tmp;
     param_tmp.kind = var_kind_VAR;
@@ -1078,7 +1076,6 @@ public:
 
   void printIR(string &out) override
   {
-    // TODO
     if (func_r_params != nullptr)
     {
       func_r_params->printIR(out);
@@ -1128,7 +1125,6 @@ public:
 
   void printIR(string &out) override
   {
-    // TODO
     if (exps != nullptr)
     {
       for (int i = 0; i < exps->size(); i++)
@@ -1140,7 +1136,6 @@ public:
 
   void list_the_param(string &out) override
   {
-    // TODO
     if (exps != nullptr)
     {
       for (int i = 0; i < exps->size(); i++)
@@ -1802,6 +1797,7 @@ public:
   {
     var_decl->printIR(out);
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1858,7 +1854,7 @@ public:
     VarUnion const_tmp;
     const_tmp.kind = var_kind_CONST;
     const_tmp.type = b_type;
-    const_tmp.const_val = const_init_val->val;
+    const_tmp.val = const_init_val->val;
     const_tmp.def_block_id = count_block;
     top_symbol_map->insert(name, const_tmp);
   }
@@ -1931,15 +1927,31 @@ public:
   {
     name = "@" + ident;
     string b_type = tmp_b_type;
-    out += name + "_" + to_string(count_block);
-    out += " = alloc i32\n";
 
     VarUnion var_tmp;
-    var_tmp.kind = var_kind_VAR;
-    var_tmp.type = b_type;
-    var_tmp.def_block_id = count_block;
-    top_symbol_map->insert(name, var_tmp);
+    if (top_symbol_map->outer_map == nullptr)
+    {
+      var_tmp.kind = var_kind_NOT_INIT_GLOBAL_VAR;
+      var_tmp.type = b_type;
+      var_tmp.def_block_id = count_block;
+      var_tmp.var_is_func_param = 0;
+      top_symbol_map->insert(name, var_tmp);
+
+      out += "global " + name + "_" + to_string(count_block);
+      out += " = alloc i32, zeroinit\n";
+    }
+    else
+    {
+      var_tmp.kind = var_kind_VAR;
+      var_tmp.type = b_type;
+      var_tmp.def_block_id = count_block;
+      top_symbol_map->insert(name, var_tmp);
+
+      out += name + "_" + to_string(count_block);
+      out += " = alloc i32\n";
+    }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1958,35 +1970,56 @@ public:
 
   void printIR(string &out) override
   {
-    name = "@" + ident;
+    VarUnion var_tmp;
     string b_type = tmp_b_type;
-    out += name + "_" + to_string(count_block);
-    out += " = alloc i32\n";
+    name = "@" + ident;
 
-    init_val->printIR(out);
-    if (init_val->name == "#")
+    if (top_symbol_map->outer_map == nullptr)
     {
-      out += "store ";
-      out += to_string(init_val->val).c_str();
-      out += ", ";
-      out += name + "_" + to_string(count_block);
-      out += "\n";
+      var_tmp.kind = var_kind_INIT_GLOBAL_VAR;
+      var_tmp.type = b_type;
+      var_tmp.def_block_id = count_block;
+
+      init_val->printIR(out);
+      assert(init_val->name == "#");
+      var_tmp.var_is_func_param = 0;
+
+      top_symbol_map->insert(name, var_tmp);
+
+      out += "global " + name + "_" + to_string(count_block);
+      out += " = alloc i32, " + to_string(init_val->val) + "\n";
     }
     else
     {
-      out += "store ";
-      out += init_val->name;
-      out += ", ";
-      out += name + "_" + to_string(count_block);
-      out += "\n";
-    }
+      var_tmp.kind = var_kind_VAR;
+      var_tmp.type = b_type;
+      var_tmp.def_block_id = count_block;
+      top_symbol_map->insert(name, var_tmp);
 
-    VarUnion var_tmp;
-    var_tmp.kind = var_kind_VAR;
-    var_tmp.type = b_type;
-    var_tmp.def_block_id = count_block;
-    top_symbol_map->insert(name, var_tmp);
+      out += name + "_" + to_string(count_block);
+      out += " = alloc i32\n";
+
+      init_val->printIR(out);
+
+      if (init_val->name == "#")
+      {
+        out += "store ";
+        out += to_string(init_val->val).c_str();
+        out += ", ";
+        out += name + "_" + to_string(count_block);
+        out += "\n";
+      }
+      else
+      {
+        out += "store ";
+        out += init_val->name;
+        out += ", ";
+        out += name + "_" + to_string(count_block);
+        out += "\n";
+      }
+    }
   }
+  
   void list_the_param(string &out) override {}
 };
 
@@ -2036,7 +2069,7 @@ public:
     if (var_u.kind == var_kind_CONST)
     {
       name = "#";
-      val = var_u.const_val;
+      val = var_u.val;
     }
     else
     {

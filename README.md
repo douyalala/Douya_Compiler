@@ -20,22 +20,21 @@ python3 test_old.py
 
 ### 总体进度
 
-Lv8.2 及以前完成
+Lv8 及以前完成
 
 ### 本地测试情况
 
 koopa：
 
-Lv8-08_lib_funcs及以前的本地测试全部PASS
+Lv8及以前的本地测试全部PASS
 
 riscv:
 
-Lv8-08_lib_funcs及以前的本地测试全部PASS
+Lv8及以前的本地测试全部PASS
 
 ## TODO List：
 
-1. Lv8.3 全局变量
-2. Lv9 数组
+1. Lv9 数组
 
 ## 注意：
 
@@ -53,3 +52,4 @@ Lv8-08_lib_funcs及以前的本地测试全部PASS
    1. 传参
    2. 返回值
    3. 找参数
+4. 有很多不会用到全局变量的地方我加了判断，到时候删掉

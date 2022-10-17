@@ -17,9 +17,10 @@ bool t[7] = {0, 0, 0, 0, 0, 0, 0};
 // 栈帧使用情况
 deque<int> stack_frame;
 
-// 符号表-指令 和 寄存器或栈 对应关系
+// 符号表的指令和寄存器或栈或全局变量的对应关系
 map<koopa_raw_value_t, string> mem_map_reg;
 map<koopa_raw_value_t, int> mem_map_stack;
+map<koopa_raw_value_t, string> mem_map_global;
 
 // 用于为br分支相关基本块计数并命名
 int count_if_else = 0;
@@ -212,8 +213,14 @@ void Visit(const koopa_raw_program_t &program)
 
     // 执行一些其他的必要操作
 
-    // 访问所有全局变量-目前没有用
-    // Visit(program.values);
+    // 访问所有全局变量
+
+    assert(program.values.kind == KOOPA_RSIK_VALUE);
+    for (int i = 0; i < program.values.len; i++)
+    {
+        koopa_raw_value_t inst = (koopa_raw_value_t)program.values.buffer[i];
+        Visit(inst);
+    }
 
     // 访问所有函数
     for (size_t i = 0; i < program.funcs.len; ++i)
@@ -420,10 +427,10 @@ void Visit(const koopa_raw_value_t &value)
         // 访问 binary 指令
         Visit(kind.data.binary, value);
         break;
-    // case KOOPA_RVT_GLOBAL_ALLOC:
-    //     // 访问 global_alloc 指令
-    //     Visit(kind.data.global_alloc, value);
-    //     break;
+    case KOOPA_RVT_GLOBAL_ALLOC:
+        // 访问 global_alloc 指令
+        Visit(kind.data.global_alloc, value);
+        break;
     case KOOPA_RVT_ALLOC:
         // 访问 alloc 指令
         Visit_alloc(value);
@@ -472,9 +479,9 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
             cout << "li a0, " << retInst.value->kind.data.integer.value << endl;
         else
         {
-            if (!(mem_map_reg.count(retInst.value) || mem_map_stack.count(retInst.value)))
+            if (!(mem_map_reg.count(retInst.value) || mem_map_stack.count(retInst.value) || mem_map_global.count(retInst.value)))
                 Visit(retInst.value);
-            assert(mem_map_reg.count(retInst.value) || mem_map_stack.count(retInst.value));
+            assert(mem_map_reg.count(retInst.value) || mem_map_stack.count(retInst.value) || mem_map_global.count(retInst.value));
             if (mem_map_reg.count(retInst.value))
             {
                 cout << "mv a0, " << mem_map_reg.find(retInst.value)->second << endl;
@@ -484,6 +491,11 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
             if (mem_map_stack.count(retInst.value))
             {
                 cout << "lw a0, " << mem_map_stack.find(retInst.value)->second << "(sp)" << endl;
+            }
+            if (mem_map_global.count(retInst.value))
+            {
+                cout << "la a0, " << mem_map_global.find(retInst.value)->second << endl;
+                cout << "lw a0, 0(a0)\n";
             }
         }
     }
@@ -547,9 +559,10 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
     string left_val;
     string right_val;
 
-    if (!(mem_map_reg.count(binaryInst.lhs) || mem_map_stack.count(binaryInst.lhs)))
+    if (!(mem_map_reg.count(binaryInst.lhs) || mem_map_stack.count(binaryInst.lhs) || mem_map_global.count(binaryInst.lhs)))
         Visit(binaryInst.lhs);
-    assert(mem_map_reg.count(binaryInst.lhs) || mem_map_stack.count(binaryInst.lhs));
+    assert(mem_map_reg.count(binaryInst.lhs) || mem_map_stack.count(binaryInst.lhs) || mem_map_global.count(binaryInst.lhs));
+
     if (mem_map_reg.count(binaryInst.lhs))
     {
         left_val = mem_map_reg.find(binaryInst.lhs)->second;
@@ -561,10 +574,16 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
         left_val = Find_reg();
         cout << "lw " << left_val << ", " << left_pos << "(sp)" << endl;
     }
+    if (mem_map_global.count(binaryInst.lhs))
+    {
+        left_val = Find_reg();
+        cout << "la " << left_val << ", " << mem_map_global.find(binaryInst.lhs)->second << endl;
+        cout << "lw " << left_val << ", 0(" << left_val << ")\n";
+    }
 
-    if (!(mem_map_reg.count(binaryInst.rhs) || mem_map_stack.count(binaryInst.rhs)))
+    if (!(mem_map_reg.count(binaryInst.rhs) || mem_map_stack.count(binaryInst.rhs) || mem_map_global.count(binaryInst.rhs)))
         Visit(binaryInst.rhs);
-    assert(mem_map_reg.count(binaryInst.rhs) || mem_map_stack.count(binaryInst.rhs));
+    assert(mem_map_reg.count(binaryInst.rhs) || mem_map_stack.count(binaryInst.rhs) || mem_map_global.count(binaryInst.rhs));
     if (mem_map_reg.count(binaryInst.rhs))
     {
         right_val = mem_map_reg.find(binaryInst.rhs)->second;
@@ -575,6 +594,12 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
         int left_pos = mem_map_stack.find(binaryInst.rhs)->second;
         right_val = Find_reg();
         cout << "lw " << right_val << ", " << left_pos << "(sp)" << endl;
+    }
+    if (mem_map_global.count(binaryInst.rhs))
+    {
+        right_val = Find_reg();
+        cout << "la " << right_val << ", " << mem_map_global.find(binaryInst.rhs)->second << endl;
+        cout << "lw " << right_val << ", 0(" << right_val << ")\n";
     }
 
     Free_reg(left_val);
@@ -646,11 +671,46 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
     mem_map_stack.insert(make_pair(super_value, stack_pos));
 }
 
-// // 访问指令-global_alloc
-// void Visit(const koopa_raw_global_alloc_t &global_allocInst, const koopa_raw_value_t &super_value)
-// {
-//
-// }
+// 访问指令-global_alloc
+void Visit(const koopa_raw_global_alloc_t &global_allocInst, const koopa_raw_value_t &super_value)
+{
+    // typedef struct {
+    // /// Initializer.
+    // koopa_raw_value_t init;
+    // } koopa_raw_global_alloc_t;
+
+    // 盲猜global_allocInst.init是INTEGER或者下面这个
+    //  /// Zero initializer.
+    // KOOPA_RVT_ZERO_INIT,
+
+    string var_name(super_value->name);
+    var_name = var_name.substr(1, strlen(super_value->name));
+
+    // for (auto i = mem_map_global.begin(); i != mem_map_global.end(); i++)
+    // {
+    //     if (i->second == var_name)
+    //     {
+    //         mem_map_global.insert(make_pair(super_value, var_name));
+    //         return;
+    //     }
+    // }
+
+    cout << ".data\n";
+
+    cout << ".globl " << var_name << endl;
+    cout << var_name << ":\n";
+
+    if (global_allocInst.init->kind.tag == KOOPA_RVT_INTEGER)
+    {
+        cout << ".word " << global_allocInst.init->kind.data.integer.value << endl;
+    }
+    else
+    {
+        cout << ".zero 4\n";
+    }
+
+    mem_map_global.insert(make_pair(super_value, var_name));
+}
 
 // 访问指令-alloc
 void Visit_alloc(const koopa_raw_value_t &super_value)
@@ -666,13 +726,29 @@ void Visit(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_valu
     // /// Source.
     // koopa_raw_value_t src;
 
-    // 目前load的东西只能是栈上的变量
-    // 返回值也要存到栈上其实等于啥也没干
-    // 所以直接把pair（super_value，src的pos）存进mem_map_stack就行了
-    if (!mem_map_stack.count(loadInst.src))
+    if (!(mem_map_stack.count(loadInst.src) || mem_map_global.count(loadInst.src)))
         Visit(loadInst.src);
-    assert(mem_map_stack.count(loadInst.src));
-    mem_map_stack.insert(make_pair(super_value, mem_map_stack.find(loadInst.src)->second));
+    assert(mem_map_stack.count(loadInst.src) || mem_map_global.count(loadInst.src));
+
+    if (mem_map_stack.count(loadInst.src))
+    {
+        // 如果load的东西是栈上的变量
+        // 返回值也要存到栈上其实等于啥也没干
+        // 所以直接把pair（super_value，src的pos）存进mem_map_stack就行了
+        mem_map_stack.insert(make_pair(super_value, mem_map_stack.find(loadInst.src)->second));
+    }
+    if (mem_map_global.count(loadInst.src))
+    {
+        // 如果load的是全局变量
+        // 先la到reg，然后sw到栈上
+        string reg = Find_reg();
+        int pos = Find_stack();
+        cout << "la " << reg << ", " << mem_map_global.find(loadInst.src)->second << endl;
+        cout << "lw " << reg << ", 0(" << reg << ")\n";
+        cout << "sw " << reg << ", " << pos << "(sp)\n";
+        Free_reg(reg);
+        mem_map_stack.insert(make_pair(super_value, pos));
+    }
 }
 
 // 访问指令-store
@@ -686,9 +762,9 @@ void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_va
     string value_reg;
 
     // 先把value弄到reg里面（也可能本来就在reg里面）
-    if (!(mem_map_reg.count(storeInst.value) || mem_map_stack.count(storeInst.value)))
+    if (!(mem_map_reg.count(storeInst.value) || mem_map_stack.count(storeInst.value) || mem_map_global.count(storeInst.value)))
         Visit(storeInst.value);
-    assert(mem_map_reg.count(storeInst.value) || mem_map_stack.count(storeInst.value));
+    assert(mem_map_reg.count(storeInst.value) || mem_map_stack.count(storeInst.value) || mem_map_global.count(storeInst.value));
     if (mem_map_reg.count(storeInst.value))
     {
         value_reg = mem_map_reg.find(storeInst.value)->second;
@@ -699,14 +775,31 @@ void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_va
         value_reg = Find_reg();
         cout << "lw " << value_reg << ", " << mem_map_stack.find(storeInst.value)->second << "(sp)" << endl;
     }
+    if (mem_map_global.count(storeInst.value))
+    {
+        value_reg = Find_reg();
+        cout << "la " << value_reg << ", " << mem_map_global.find(storeInst.value)->second << endl;
+        cout << "lw " << value_reg << ", 0(" << value_reg << ")\n";
+    }
+
+    // 然后sw进dest（目前dest应该只能是栈上的变量或者全局变量）
+    if (!(mem_map_stack.count(storeInst.dest) || mem_map_global.count(storeInst.dest)))
+        Visit(storeInst.dest);
+    assert(mem_map_stack.count(storeInst.dest) || mem_map_global.count(storeInst.dest));
+
+    if (mem_map_stack.count(storeInst.dest))
+    {
+        cout << "sw " << value_reg << ", " << mem_map_stack.find(storeInst.dest)->second << "(sp)" << endl;
+    }
+    if (mem_map_global.count(storeInst.dest))
+    {
+        string tmp_reg = Find_reg();
+        Free_reg(tmp_reg);
+        cout << "la " << tmp_reg << ", " << mem_map_global.find(storeInst.dest)->second << endl;
+        cout << "sw " << value_reg << ", 0(" << tmp_reg << ")\n";
+    }
 
     Free_reg(value_reg);
-
-    // 然后sw进dest（目前dest应该只能是栈上的变量）
-    if (!mem_map_stack.count(storeInst.dest))
-        Visit(storeInst.dest);
-    assert(mem_map_stack.count(storeInst.dest));
-    cout << "sw " << value_reg << ", " << mem_map_stack.find(storeInst.dest)->second << "(sp)" << endl;
 }
 
 // 访问指令-br
@@ -730,9 +823,9 @@ void Visit(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_valu
 
     string br_cond;
 
-    if (!(mem_map_reg.count(brInst.cond) || mem_map_stack.count(brInst.cond)))
+    if (!(mem_map_reg.count(brInst.cond) || mem_map_stack.count(brInst.cond) || mem_map_global.count(brInst.cond)))
         Visit(brInst.cond);
-    assert(mem_map_reg.count(brInst.cond) || mem_map_stack.count(brInst.cond));
+    assert(mem_map_reg.count(brInst.cond) || mem_map_stack.count(brInst.cond) || mem_map_global.count(brInst.cond));
     if (mem_map_reg.count(brInst.cond))
     {
         br_cond = mem_map_reg.find(brInst.cond)->second;
@@ -743,6 +836,12 @@ void Visit(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_valu
         int br_cond_pos = mem_map_stack.find(brInst.cond)->second;
         br_cond = Find_reg();
         cout << "lw " << br_cond << ", " << br_cond_pos << "(sp)" << endl;
+    }
+    if (mem_map_global.count(brInst.cond))
+    {
+        br_cond = Find_reg();
+        cout << "la " << br_cond << ", " << mem_map_global.find(brInst.cond)->second << endl;
+        cout << "lw " << br_cond << ", 0(" << br_cond << ")\n";
     }
 
     Free_reg(br_cond);
@@ -827,7 +926,7 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
     for (int i = 0; i < callInst.args.len; i++)
     {
         koopa_raw_value_t arg_inst = (koopa_raw_value_t)callInst.args.buffer[i];
-        if (!(mem_map_reg.count(arg_inst) || mem_map_stack.count(arg_inst)))
+        if (!(mem_map_reg.count(arg_inst) || mem_map_stack.count(arg_inst) || mem_map_global.count(arg_inst)))
         {
             // 先执行call，不然其他寄存器会被弄坏
             // call回来的东西会直接存在栈上，所以不用担心返回值被弄坏
@@ -840,9 +939,9 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
     for (int i = 0; i < callInst.args.len; i++)
     {
         koopa_raw_value_t arg_inst = (koopa_raw_value_t)callInst.args.buffer[i];
-        if (!(mem_map_reg.count(arg_inst) || mem_map_stack.count(arg_inst)))
+        if (!(mem_map_reg.count(arg_inst) || mem_map_stack.count(arg_inst) || mem_map_global.count(arg_inst)))
             Visit(arg_inst);
-        assert(mem_map_reg.count(arg_inst) || mem_map_stack.count(arg_inst));
+        assert(mem_map_reg.count(arg_inst) || mem_map_stack.count(arg_inst) || mem_map_global.count(arg_inst));
 
         if (mem_map_reg.count(arg_inst))
         {
@@ -878,11 +977,29 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
             }
             else
             {
-                // TODO
                 string reg = Find_reg();
                 Free_reg(reg);
                 int pos = mem_map_stack.find(arg_inst)->second;
                 cout << "lw " << reg << ", " << pos << "(sp)" << endl;
+                // 位置是sp+(i-8)*4
+                cout << "sw " << reg << ", " << (i - 8) * 4 << "(sp)" << endl;
+            }
+        }
+        if (mem_map_global.count(arg_inst))
+        {
+            if (i < 8)
+            {
+                string reg = "a0";
+                reg[1] += i;
+                cout << "la " << reg << ", " << mem_map_global.find(arg_inst)->second << endl;
+                cout << "lw " << reg << ", 0(" << reg << ")\n";
+            }
+            else
+            {
+                string reg = Find_reg();
+                Free_reg(reg);
+                cout << "la " << reg << ", " << mem_map_global.find(arg_inst)->second << endl;
+                cout << "lw " << reg << ", 0(" << reg << ")\n";
                 // 位置是sp+(i-8)*4
                 cout << "sw " << reg << ", " << (i - 8) * 4 << "(sp)" << endl;
             }
@@ -926,7 +1043,6 @@ void Visit(const koopa_raw_func_arg_ref_t &func_arg_refInst, const koopa_raw_val
     }
     else
     {
-        // TODO
         // sp+这个函数的大小+(index-8)*4
         int pos = save_stack_size.back() + (func_arg_refInst.index - 8) * 4;
         mem_map_stack.insert(make_pair(super_value, pos));
@@ -993,10 +1109,10 @@ void Count_var(const koopa_raw_value_t &value)
         // 访问 binary 指令
         Count_var(kind.data.binary, value);
         break;
-    // case KOOPA_RVT_GLOBAL_ALLOC:
-    //     // 访问 global_alloc 指令
-    //     Count_var(kind.data.global_alloc, value);
-    //     break;
+    case KOOPA_RVT_GLOBAL_ALLOC:
+        // 访问 global_alloc 指令
+        // Count_var(kind.data.global_alloc, value);
+        break;
     case KOOPA_RVT_ALLOC:
         // 访问 alloc 指令
         Count_var_alloc(value);
@@ -1044,9 +1160,9 @@ void Count_var(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super
         return;
 
     // 如果不是，则先计算获取返回值所需要的位置
-    if (!(count_mem_map_reg.count(retInst.value) || count_mem_map_stack.count(retInst.value)))
+    if (!(count_mem_map_reg.count(retInst.value) || count_mem_map_stack.count(retInst.value) || mem_map_global.count(retInst.value)))
         Count_var(retInst.value);
-    assert(count_mem_map_reg.count(retInst.value) || count_mem_map_stack.count(retInst.value));
+    assert(count_mem_map_reg.count(retInst.value) || count_mem_map_stack.count(retInst.value) || mem_map_global.count(retInst.value));
 
     // 用完了这个返回值就可以把它从寄存器里去掉了
     if (count_mem_map_reg.count(retInst.value))
@@ -1067,11 +1183,13 @@ void Count_var(const koopa_raw_integer_t &intInst, const koopa_raw_value_t &supe
 // 计算指令变量-binary
 void Count_var(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_value)
 {
-    if (!(count_mem_map_reg.count(binaryInst.lhs) || count_mem_map_stack.count(binaryInst.lhs)))
+    if (!(count_mem_map_reg.count(binaryInst.lhs) || count_mem_map_stack.count(binaryInst.lhs) || mem_map_global.count(binaryInst.lhs)))
         Count_var(binaryInst.lhs);
+    assert(count_mem_map_reg.count(binaryInst.lhs) || count_mem_map_stack.count(binaryInst.lhs) || mem_map_global.count(binaryInst.lhs));
 
-    if (!(count_mem_map_reg.count(binaryInst.rhs) || count_mem_map_stack.count(binaryInst.rhs)))
+    if (!(count_mem_map_reg.count(binaryInst.rhs) || count_mem_map_stack.count(binaryInst.rhs) || mem_map_global.count(binaryInst.rhs)))
         Count_var(binaryInst.rhs);
+    assert(count_mem_map_reg.count(binaryInst.rhs) || count_mem_map_stack.count(binaryInst.rhs) || mem_map_global.count(binaryInst.rhs));
 
     int stack_pos = Add_stack_count();
     count_mem_map_stack.insert(make_pair(super_value, stack_pos));
@@ -1099,42 +1217,46 @@ void Count_var_alloc(const koopa_raw_value_t &super_value)
 // 计算指令变量-load
 void Count_var(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_value)
 {
-    if (!count_mem_map_stack.count(loadInst.src))
+    if (!(count_mem_map_stack.count(loadInst.src) || mem_map_global.count(loadInst.src)))
         Count_var(loadInst.src);
-    assert(count_mem_map_stack.count(loadInst.src));
-    count_mem_map_stack.insert(make_pair(super_value, count_mem_map_stack.find(loadInst.src)->second));
+    assert(count_mem_map_stack.count(loadInst.src) || mem_map_global.count(loadInst.src));
+
+    if (count_mem_map_stack.count(loadInst.src))
+    {
+        count_mem_map_stack.insert(make_pair(super_value, count_mem_map_stack.find(loadInst.src)->second));
+    }
+    if (mem_map_global.count(loadInst.src))
+    {
+        int stack_pos = Add_stack_count();
+        count_mem_map_stack.insert(make_pair(super_value, stack_pos));
+    }
 }
 
 // 计算指令变量-store
 void Count_var(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_value)
 {
-    string value_reg;
-
     // 先把value弄到reg里面（也可能本来就在reg里面）
-    if (!(count_mem_map_reg.count(storeInst.value) || count_mem_map_stack.count(storeInst.value)))
+    if (!(count_mem_map_reg.count(storeInst.value) || count_mem_map_stack.count(storeInst.value) || mem_map_global.count(storeInst.value)))
         Count_var(storeInst.value);
-    assert(count_mem_map_reg.count(storeInst.value) || count_mem_map_stack.count(storeInst.value));
+    assert(count_mem_map_reg.count(storeInst.value) || count_mem_map_stack.count(storeInst.value) || mem_map_global.count(storeInst.value));
+
     if (count_mem_map_reg.count(storeInst.value))
     {
-        value_reg = count_mem_map_reg.find(storeInst.value)->second;
+        Free_reg(count_mem_map_reg.find(storeInst.value)->second);
         count_mem_map_reg.erase(storeInst.value);
     }
-    if (count_mem_map_stack.count(storeInst.value))
-        value_reg = Find_reg();
 
-    Free_reg(value_reg);
-
-    // 然后sw进dest（目前dest应该只能是栈上的变量）
-    if (!count_mem_map_stack.count(storeInst.dest))
+    // 然后sw进dest（目前dest应该只能是栈上的变量或者全局变量）
+    if (!(count_mem_map_stack.count(storeInst.dest) || mem_map_global.count(storeInst.dest)))
         Count_var(storeInst.dest);
-    assert(count_mem_map_stack.count(storeInst.dest));
+    assert(count_mem_map_stack.count(storeInst.dest) || mem_map_global.count(storeInst.dest));
 }
 
 // 访问指令-br
 void Count_var(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_value)
 {
     // cond
-    if (!(count_mem_map_reg.count(brInst.cond) || count_mem_map_stack.count(brInst.cond)))
+    if (!(count_mem_map_reg.count(brInst.cond) || count_mem_map_stack.count(brInst.cond) || mem_map_global.count(brInst.cond)))
         Count_var(brInst.cond);
 
     //删掉cond

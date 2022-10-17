@@ -14,6 +14,8 @@ enum VarKind
 {
     var_kind_CONST,
     var_kind_VAR,
+    var_kind_INIT_GLOBAL_VAR,
+    var_kind_NOT_INIT_GLOBAL_VAR,
     var_kind_FUNC,
     var_kind_ERROR
 };
@@ -25,7 +27,7 @@ struct VarUnion
     int def_block_id;
     union
     {
-        int const_val;
+        int val;
         int var_is_func_param = 0;
     };
 };
