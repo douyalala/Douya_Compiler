@@ -1,54 +1,32 @@
-# douya的编译实践项目
+# Douya's Compiler For PKU compiler course
 
 它曾经是：**基于 Makefile 的 SysY 编译器项目模板(https://github.com/pku-minic/sysy-make-template)**
 
-## 使用方法
+It used to be **SysY Make Template(https://github.com/pku-minic/sysy-make-template)**
 
-make并运行build/compiler -koopa/riscv hello.c -o hello.koopa
+## Usage
+
+1. 挂载到docker
+   run in docker
+
+```sh
+docker run -it --rm -v [Directory of this folder]:/root/compiler maxxing/compiler-dev bash
+```
+
+2. make并运行build/compiler -koopa/riscv hello.c -o hello.koopa
+   make and run build/compiler -koopa/riscv hello.c -o hello.koopa
 
 ```sh
 python3 make_run.py -r/k
 ```
 
-本地测试所有目前做完的部分
+3. 本地测试所有目前做完的部分
+   local test
 
 ```sh
 python3 test_old.py
 ```
 
-## 当前进度
-
-### 总体进度
-
-Lv8 及以前完成
-
-### 本地测试情况
-
-koopa：
-
-Lv8及以前的本地测试全部PASS
-
-riscv:
-
-Lv8及以前的本地测试全部PASS
-
 ## TODO List：
 
-1. Lv9 数组
-
-## 注意：
-
-1. Lv6.2 短路求值：目前没有相关测试，可能有未知错误
-2. 现在临时变量命名和基本块标号较为浪费
-   1. 进入函数时基本块标号+1
-      1. 这个有没有必要还不好说，主要是害怕函数内定义的变量和函数参数同名
-   2. 进入形如{}的基本块时标号+1
-   3. 导致了一个函数至少会令基本块标号+2
-   4. 无论处于哪个基本块中，临时变量标号递增，标号很容易飞到几十
-      1. 也许可以考虑在每个函数中临时变量分别计数？
-      2. 当然不管也没啥问题就是比较丑
-   5. 变量名为原名+定义它的基本块标号，由于基本块标号起飞，变量名也会起飞
-3. 总感觉函数调用这块（下面三部分）写的很乱，也不知道会不会有问题
-   1. 传参
-   2. 返回值
-   3. 找参数
+1. Lv9 array

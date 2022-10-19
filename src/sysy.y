@@ -1,4 +1,3 @@
-// 这里写一些选项, 可以控制 Flex/Bison 的某些行为
 %code requires {
   #include <iostream>
   #include <memory>
@@ -9,15 +8,13 @@
 
 %{
 
-// 这里写一些全局的代码：头文件和一些全局声明/定义
-
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
 #include <AST.h>
 
-// 声明 lexer 函数和错误处理函数
+// lexer and  yyerror
 int yylex();
 void yyerror(std::unique_ptr<BaseAST> &ast, const char *s);
 
@@ -25,12 +22,10 @@ using namespace std;
 
 %}
 
-// 对于 Bison, 这里可以定义终结符/非终结符的类型
-
-// 定义 parser 函数和错误处理函数的附加参数
+// difine parser and yyerror's extra param
 %parse-param { std::unique_ptr<BaseAST> &ast }
 
-//yylval 的定义
+// yylval difination
 %union {
   std::string *str_val;
   int int_val;
@@ -39,13 +34,12 @@ using namespace std;
 }
 
 
-// lexer 返回的所有 token 种类的声明
-// 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
+// lexer token's type
 %token INT RETURN LE GE EQ NE LAND LOR CONST IF ELSE WHILE CONTINUE BREAK VOID
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 
-// 非终结符的类型定义
+// non-termina's type
 %type <ast_val>
 CompUnit
 FuncDef FuncFParams FuncFParam FuncRParams
@@ -59,9 +53,6 @@ VarDecl VarDef InitVal
 %type <ast_list_val> BlockItem_list ConstDef_list VarDef_list FuncFParams_list Exp_list
 
 %%
-
-// 这里写 Flex/Bison 的规则描述
-// 对于 Bison, 这里写的是 parser 遇到某种语法规则后做的操作
 
 ROOT
   : CompUnit {
@@ -588,11 +579,6 @@ InitVal
   }
 
 %%
-
-// 这里写一些用户自定义的代码
-// 比如你希望在生成的 C/C++ 文件里定义一个函数, 做一些辅助工作
-// 你同时希望在之前的规则描述里调用你定义的函数
-// 那么, 你可以把 C/C++ 的函数定义写在这里, 声明写在文件开头
 
 void yyerror(unique_ptr<BaseAST> &ast, const char *s) {
   cerr << "error: " << s << endl;

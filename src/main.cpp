@@ -12,16 +12,10 @@
 
 using namespace std;
 
-// 声明 lexer 的输入, 以及 parser 函数
-// 为什么不引用 sysy.tab.hpp 呢? 因为首先里面没有 yyin 的定义
-// 其次, 因为这个文件不是我们自己写的, 而是被 Bison 生成出来的
-// 你的代码编辑器/IDE 很可能找不到这个文件, 然后会给你报错 (虽然编译不会出错)
-// 看起来会很烦人, 于是干脆采用这种看起来 dirty 但实际很有效的手段
 extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 FILE *out_file;
 
-// 一些不知道为什么写了#pragma once 但还是会重定义的符号，只能extern然后定义在这里
 map<string, VarUnion> var_map;
 Multi_Symbol_Map *top_symbol_map = new Multi_Symbol_Map;
 string tmp_b_type = "";
@@ -61,33 +55,32 @@ void add_sysy_func()
 int main(int argc, const char *argv[])
 {
   add_sysy_func();
-  // 解析命令行参数. 测试脚本/评测平台要求你的编译器能接收如下参数:
-  // compiler 模式 输入文件 -o 输出文件
+
   assert(argc == 5);
   auto mode = argv[1];
   auto input = argv[2];
   auto output = argv[4];
 
-  cout << mode << "\n";
+  // cout << mode << "\n";
 
-  // 打开输入文件, 并且指定 lexer 在解析的时候读取这个文件
+  // open input file
   yyin = fopen(input, "r");
   assert(yyin);
 
-  // 调用 parser 函数, parser 函数会进一步调用 lexer 解析输入文件的
+  // call parser, parser will call lexer
   unique_ptr<BaseAST> ast;
   auto parse_ret = yyparse(ast);
   assert(!parse_ret);
 
-  // //Dump输出调试
-  ast->Dump();
+  // debug
+  // ast->Dump();
 
-  // AST 转换为 字符串 IR
+  // AST to IR
   string IRstring = "";
   ast->printIR(IRstring);
   const char *IRstr = IRstring.c_str();
 
-  //进行koopa测试
+  // koopa mode
   if (mode[1] == 'k')
   {
     out_file = fopen(output, "w+");
@@ -97,28 +90,23 @@ int main(int argc, const char *argv[])
     return 0;
   }
 
-  // 解析字符串 str, 得到 Koopa IR 程序
+  // str Koopa to program Koopa
   koopa_program_t program;
   koopa_error_code_t koopa_ret = koopa_parse_from_string(IRstr, &program);
-  assert(koopa_ret == KOOPA_EC_SUCCESS); // 确保解析时没有出错
-  // 创建一个 raw program builder, 用来构建 raw program
+  assert(koopa_ret == KOOPA_EC_SUCCESS);
   koopa_raw_program_builder_t builder = koopa_new_raw_program_builder();
-  // 将 Koopa IR 程序转换为 raw program
+  // Koopa IR to raw program
   koopa_raw_program_t raw = koopa_build_raw_program(builder, program);
-  // 释放 Koopa IR 程序占用的内存
   koopa_delete_program(program);
 
-  // 处理 raw program
-  // 且如果测试为riscv，就输出到指定文件（输出重定向
+  // risecv mode
   if (mode[1] == 'r')
   {
+    // output redirection
     freopen(output, "w+", stdout);
   }
   Visit(raw);
 
-  // 处理完成, 释放 raw program builder 占用的内存
-  // 注意, raw program 中所有的指针指向的内存均为 raw program builder 的内存
-  // 所以不要在 raw program 处理完毕之前释放 builder
   koopa_delete_raw_program_builder(builder);
 
   return 0;

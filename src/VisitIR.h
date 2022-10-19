@@ -11,45 +11,40 @@
 
 using namespace std;
 
-// 寄存器使用情况
+// reg
 bool a[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 bool t[7] = {0, 0, 0, 0, 0, 0, 0};
-// 栈帧使用情况
+// stack
 deque<int> stack_frame;
 
-// 符号表的指令和寄存器或栈或全局变量的对应关系
+// value - reg/stack/global
 map<koopa_raw_value_t, string> mem_map_reg;
 map<koopa_raw_value_t, int> mem_map_stack;
 map<koopa_raw_value_t, string> mem_map_global;
 
-// 用于为br分支相关基本块计数并命名
+// count and name br bb
 int count_if_else = 0;
 
-// 用于为jump相关基本块计数并命名
+// count and name br bb
 int count_jump_Label = 0;
 
-// 基本块和Label的对应关系
+// bb - Label
 map<koopa_raw_basic_block_t, string> mem_map_block;
 
-// 计数部分，临时栈帧使用情况和临时符号表
-// 暂时没发现寄存器部分使用原版会出什么问题，所以没有单开临时寄存器数组
+// count stack size - tmp map and stack
 int stack_frame_count = 0;
 map<koopa_raw_value_t, string> count_mem_map_reg;
 map<koopa_raw_value_t, int> count_mem_map_stack;
 set<koopa_raw_basic_block_t> count_mem_map_block;
-// 计数部分，用于记录函数内是否含有call
+// count stack size - if func has call inst
 bool count_has_call = 0;
 
-// // 记录函数调用的时候保存的寄存器
-// deque<deque<string>> save_reg;
-
-//记录函数开的栈的大小
+// stack size
 deque<int> save_stack_size;
 
-//记录函数有没有保存ra
+// if func push ra in stack
 deque<bool> save_ra;
 
-// 函数声明
 void Visit(const koopa_raw_program_t &program);
 void Visit(const koopa_raw_function_t &func);
 void Visit(const koopa_raw_basic_block_t &bb);
@@ -82,7 +77,6 @@ void Count_var(const koopa_raw_func_arg_ref_t &func_arg_refInst, const koopa_raw
 
 void Visit(const koopa_raw_slice_t &slice);
 
-// 查找一个可用的寄存器
 string Find_reg()
 {
     for (int i = 0; i < 7; i++)
@@ -107,7 +101,6 @@ string Find_reg()
     return "out_of_limit_reg";
 }
 
-// 释放一个寄存器，让它重新变成可用
 void Free_reg(string reg)
 {
     if (reg[0] == 'a')
@@ -116,7 +109,6 @@ void Free_reg(string reg)
         t[(reg[1] - '0')] = 0;
 }
 
-// 查找一个可用的栈位置
 int Find_stack()
 {
     int now_stack_pos = stack_frame.back();
@@ -127,82 +119,13 @@ int Find_stack()
     return now_stack_pos;
 }
 
-// 查找一个可用的栈位置-count环节
 int Add_stack_count(int num = 1)
 {
     stack_frame_count += num;
     return stack_frame_count;
 }
 
-// // 查找有多少个寄存器需要保存
-// void count_Push_reg()
-// {
-//     deque<string> tmp;
-//     for (int i = 0; i < 7; i++)
-//     {
-//         if (t[i] == 1)
-//         {
-//             string reg_name = "t" + to_string(i);
-//             tmp.push_back(reg_name);
-//         }
-//     }
-//     for (int i = 0; i < 8; i++)
-//     {
-//         if (a[i] == 1)
-//         {
-//             string reg_name = "a" + to_string(i);
-//             tmp.push_back(reg_name);
-//         }
-//     }
-//     save_reg.push_back(tmp);
-// }
-
-// // 保存寄存器
-// void Push_reg()
-// {
-//     int stack_size = save_stack_size.back();
-//     deque<string> tmp = save_reg.back();
-//     int reg_n = tmp.size();
-//     for (int i = 0; i < reg_n; i++)
-//     {
-//         string reg_name = tmp.at(i);
-//         Free_reg(reg_name);
-//         int pian_yi = stack_size - (i + 1) * 4;
-//         cout << "sw " << reg_name << ", " << pian_yi << "(sp)" << endl;
-//     }
-// }
-
-// // 真的还原寄存器
-// void Pop_reg()
-// {
-//     deque<string> tmp = save_reg.back();
-//     save_reg.pop_back();
-//     int reg_n = tmp.size();
-//     for (int i = 0; i < reg_n; i++)
-//     {
-//         string reg_name = tmp.at(i);
-//         if (reg_name[0] == 'a')
-//             a[(reg_name[1] - '0')] = 1;
-//         else
-//             t[(reg_name[1] - '0')] = 1;
-//     }
-// }
-
-// // 还原寄存器-print
-// void Pop_reg_print()
-// {
-//     int stack_size = save_stack_size.back();
-//     deque<string> tmp = save_reg.back();
-//     int reg_n = tmp.size();
-//     for (int i = 0; i < reg_n; i++)
-//     {
-//         string reg_name = tmp.at(i);
-//         int pian_yi = stack_size - (i + 1) * 4;
-//         cout << "lw " << reg_name << ", " << pian_yi << "(sp)" << endl;
-//     }
-// }
-
-// 访问 raw program
+// visit raw program
 void Visit(const koopa_raw_program_t &program)
 {
     // koopa_raw_program_t
@@ -211,10 +134,7 @@ void Visit(const koopa_raw_program_t &program)
     /// Function definitions.
     // koopa_raw_slice_t funcs;
 
-    // 执行一些其他的必要操作
-
-    // 访问所有全局变量
-
+    // visit global value
     assert(program.values.kind == KOOPA_RSIK_VALUE);
     for (int i = 0; i < program.values.len; i++)
     {
@@ -222,7 +142,7 @@ void Visit(const koopa_raw_program_t &program)
         Visit(inst);
     }
 
-    // 访问所有函数
+    // visit func
     for (size_t i = 0; i < program.funcs.len; ++i)
     {
         assert(program.funcs.kind == KOOPA_RSIK_FUNCTION);
@@ -231,7 +151,7 @@ void Visit(const koopa_raw_program_t &program)
     }
 }
 
-// 访问函数
+// visit func
 void Visit(const koopa_raw_function_t &func)
 {
     // koopa_raw_function_data_t
@@ -244,62 +164,53 @@ void Visit(const koopa_raw_function_t &func)
     /// Basic blocks, empty if is a function declaration.
     // koopa_raw_slice_t bbs;
 
-    // 执行一些其他的必要操作
+    // if this func is a declaration
     if (!func->bbs.len)
         return;
-    // 输出函数头头的那些东西：
+
     string tmp_name(func->name);
     cout << "\n.text\n.globl " << tmp_name.substr(1, strlen(func->name)) << endl;
     cout << tmp_name.substr(1, strlen(func->name)) << ":\n";
 
-    // 准备扩展sp
     int stack_size = 0;
 
-    // // 记录需要保存的寄存器数量和名字
-    // count_Push_reg();
-    // // 需要为保存寄存器分配的栈的大小
-    // stack_size += (save_reg.back().size()) * 4;
-
-    // 计算需要为变量/参数/返回值分配的栈大小
-    // 清空临时栈帧和临时符号表
+    // count siack size - var/func param/func return value
     count_mem_map_reg.clear();
     count_mem_map_stack.clear();
     stack_frame_count = 0;
     count_mem_map_block.clear();
     count_has_call = 0;
-    // 计算所有基本块
     for (size_t i = 0; i < func->bbs.len; ++i)
     {
         assert(func->bbs.kind == KOOPA_RSIK_BASIC_BLOCK);
         koopa_raw_basic_block_t bb = (koopa_raw_basic_block_t)func->bbs.buffer[i];
         Count_var(bb);
     }
-    // 得到需要为变量开的栈的大小 max_count_stack*4
+
+    // stack_frame_count*4
     stack_size += stack_frame_count * 4;
-    // 如果需要存返回值
+
+    // if need to push ra
     if (count_has_call)
         stack_size += 4;
 
-    // sp对齐到16
+    // sp align 16
     if (stack_size % 16 != 0)
         stack_size += (16 - stack_size % 16);
 
-    // 栈帧使用情况计数empty_stack_pos：表示的是现在的栈有多少个位置还空着，用于计算把变量放在什么位置
+    // empty_stack_pos：now which stack pos can be used
     int empty_stack_pos = stack_size;
-    // 存返回值占用一个4位
+
+    // need 4 to push ra
     if (count_has_call)
         empty_stack_pos = empty_stack_pos - 4;
-    // // 每个寄存器4位
-    // empty_stack_pos = empty_stack_pos - 4 * (save_reg.back().size());
-    // 剩下的可用
-    // cout << stack_size << " " << empty_stack_pos << endl;
+
     stack_frame.push_back(empty_stack_pos);
 
-    // 保存当前栈帧大小
-    // 为return时候挪sp准备
+    // push stack size
     save_stack_size.push_back(stack_size);
 
-    // 挪sp
+    // move sp
     if (stack_size != 0)
     {
         if (stack_size >= -2048 && stack_size <= 2047)
@@ -313,18 +224,14 @@ void Visit(const koopa_raw_function_t &func)
         }
     }
 
-    // 保存ra
+    // push ra
     if (count_has_call)
     {
         cout << "sw ra, " << (stack_size - 4) << "(sp)" << endl;
     }
-    // 记录是否保存了ra
     save_ra.push_back(count_has_call);
 
-    // // 保存寄存器
-    // Push_reg();
-
-    // 访问所有基本块
+    // visit bb
     for (size_t i = 0; i < func->bbs.len; ++i)
     {
         assert(func->bbs.kind == KOOPA_RSIK_BASIC_BLOCK);
@@ -333,20 +240,17 @@ void Visit(const koopa_raw_function_t &func)
             Visit(bb);
     }
 
-    // 还原ra
+    // pop save_ra
     save_ra.pop_back();
 
-    // // 还原保存的寄存器
-    // Pop_reg();
-
-    // 栈大小不需要了，pop掉
+    // pop stack size
     save_stack_size.pop_back();
 
-    // 把栈帧记录pop掉
+    // pop stack pos count
     stack_frame.pop_back();
 }
 
-// 访问基本块
+// visit bb
 void Visit(const koopa_raw_basic_block_t &bb)
 {
     // koopa_raw_basic_block_data_t
@@ -359,10 +263,7 @@ void Visit(const koopa_raw_basic_block_t &bb)
     /// Instructions in this basic block.
     // koopa_raw_slice_t insts;
 
-    // 执行一些其他的必要操作
-    // ...
-
-    // 访问所有指令
+    // visit value
     for (size_t i = 0; i < bb->insts.len; ++i)
     {
         assert(bb->insts.kind == KOOPA_RSIK_VALUE);
@@ -371,7 +272,7 @@ void Visit(const koopa_raw_basic_block_t &bb)
     }
 }
 
-// 访问基本块 并创建Label
+// visit bb, creat Label
 void Visit(const koopa_raw_basic_block_t &bb, string Label)
 {
     // koopa_raw_basic_block_data_t
@@ -384,13 +285,10 @@ void Visit(const koopa_raw_basic_block_t &bb, string Label)
     /// Instructions in this basic block.
     // koopa_raw_slice_t insts;
 
-    // 执行一些其他的必要操作
-    // ...
-
     cout << endl
          << Label << ":\n";
 
-    // 访问所有指令
+    // visit value
     for (size_t i = 0; i < bb->insts.len; ++i)
     {
         assert(bb->insts.kind == KOOPA_RSIK_VALUE);
@@ -399,7 +297,7 @@ void Visit(const koopa_raw_basic_block_t &bb, string Label)
     }
 }
 
-// 访问指令
+// visit value
 void Visit(const koopa_raw_value_t &value)
 {
     // koopa_raw_value_data
@@ -411,68 +309,66 @@ void Visit(const koopa_raw_value_t &value)
     /// Kind of value.
     // koopa_raw_value_kind_t kind;
 
-    // 根据指令类型判断后续需要如何访问
     const auto &kind = value->kind;
     switch (kind.tag)
     {
     case KOOPA_RVT_RETURN:
-        // 访问 return 指令
+        // visit return
         Visit(kind.data.ret, value);
         break;
     case KOOPA_RVT_INTEGER:
-        // 访问 integer 指令
+        // visit integer
         Visit(kind.data.integer, value);
         break;
     case KOOPA_RVT_BINARY:
-        // 访问 binary 指令
+        // visit binary
         Visit(kind.data.binary, value);
         break;
     case KOOPA_RVT_GLOBAL_ALLOC:
-        // 访问 global_alloc 指令
+        // visit global_alloc
         Visit(kind.data.global_alloc, value);
         break;
     case KOOPA_RVT_ALLOC:
-        // 访问 alloc 指令
+        // visit alloc
         Visit_alloc(value);
         break;
     case KOOPA_RVT_LOAD:
-        // 访问 load 指令
+        // visit load
         Visit(kind.data.load, value);
         break;
     case KOOPA_RVT_STORE:
-        // 访问 store 指令
+        // visit store
         Visit(kind.data.store, value);
         break;
     case KOOPA_RVT_BRANCH:
-        // 访问 br 指令
+        // visit br
         Visit(kind.data.branch, value);
         break;
     case KOOPA_RVT_JUMP:
-        // 访问 jump 指令
+        // visit jump
         Visit(kind.data.jump, value);
         break;
     case KOOPA_RVT_CALL:
-        // 访问 jump 指令
+        // visit jump
         Visit(kind.data.call, value);
         break;
     case KOOPA_RVT_FUNC_ARG_REF:
-        // 访问 func_arg 指令
+        // visit func_arg
         Visit(kind.data.func_arg_ref, value);
         break;
     default:
-        // 其他类型暂时遇不到
         assert(false);
     }
 }
 
-// 访问指令-return
+// visit value - return
 void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_value)
 {
     // koopa_raw_return_t
     /// Return value, null if no return value.
     // koopa_raw_value_t value;
 
-    // 设置返回值：如果是常数，就li，否则mv
+    // if const li, else mv
     if (retInst.value != nullptr)
     {
         if (retInst.value->kind.tag == KOOPA_RVT_INTEGER)
@@ -495,17 +391,15 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
         }
     }
 
-    // // 返回之前，解放保存的寄存器
-    // Pop_reg_print();
-
-    // 还原ra
+    // pop ra
     int stack_size = save_stack_size.back();
     bool has_call = save_ra.back();
     if (has_call)
     {
         cout << "lw ra, " << (stack_size - 4) << "(sp)" << endl;
     }
-    // 把sp挪回去
+
+    // move sp back
     if (stack_size != 0)
     {
         if (stack_size >= -2048 && stack_size <= 2047)
@@ -522,12 +416,13 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
     cout << "ret\n";
 }
 
-// 访问指令-integer
+// visit value - integer
 void Visit(const koopa_raw_integer_t &intInst, const koopa_raw_value_t &super_value)
 {
     // koopa_raw_integer_t：
     /// Value of integer.
     // int32_t value;
+
     if (intInst.value == 0)
         mem_map_reg.insert(make_pair(super_value, "x0"));
     else
@@ -538,7 +433,7 @@ void Visit(const koopa_raw_integer_t &intInst, const koopa_raw_value_t &super_va
     }
 }
 
-// 访问指令-binary
+// visit value - binary
 void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_value)
 {
     // typedef struct
@@ -593,12 +488,12 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
     switch (binaryInst.op)
     {
     case KOOPA_RBO_NOT_EQ:
-        //先把俩东西按位异或（xor），然后看看不是0（seqz）
+        // xor, if not 0 (snez)
         cout << "xor " << reg << ", " << left_val << ", " << right_val << "\n";
         cout << "snez " << reg << ", " << reg << "\n";
         break;
     case KOOPA_RBO_EQ:
-        //先把俩东西按位异或（xor），然后看看是0吗（seqz）
+        // xor, if is 0 (seqz)
         cout << "xor " << reg << ", " << left_val << ", " << right_val << "\n";
         cout << "seqz " << reg << ", " << reg << "\n";
         break;
@@ -609,12 +504,12 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
         cout << "slt " << reg << ", " << left_val << ", " << right_val << "\n";
         break;
     case KOOPA_RBO_GE:
-        //就是不小于：先比一下第一个是不是小于第二个，在取一个逻辑not（和0是否一样）
+        // not slt
         cout << "slt " << reg << ", " << left_val << ", " << right_val << "\n";
         cout << "seqz " << reg << ", " << reg << "\n";
         break;
     case KOOPA_RBO_LE:
-        //同上，就是不大于
+        // not sgt
         cout << "sgt " << reg << ", " << left_val << ", " << right_val << "\n";
         cout << "seqz " << reg << ", " << reg << "\n";
         break;
@@ -654,7 +549,7 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
     mem_map_stack.insert(make_pair(super_value, stack_pos));
 }
 
-// 访问指令-global_alloc
+// visit value - global_alloc
 void Visit(const koopa_raw_global_alloc_t &global_allocInst, const koopa_raw_value_t &super_value)
 {
     // typedef struct {
@@ -662,21 +557,12 @@ void Visit(const koopa_raw_global_alloc_t &global_allocInst, const koopa_raw_val
     // koopa_raw_value_t init;
     // } koopa_raw_global_alloc_t;
 
-    // 盲猜global_allocInst.init是INTEGER或者下面这个
+    // I guess global_allocInst.init is integer or this:
     //  /// Zero initializer.
     // KOOPA_RVT_ZERO_INIT,
 
     string var_name(super_value->name);
     var_name = var_name.substr(1, strlen(super_value->name));
-
-    // for (auto i = mem_map_global.begin(); i != mem_map_global.end(); i++)
-    // {
-    //     if (i->second == var_name)
-    //     {
-    //         mem_map_global.insert(make_pair(super_value, var_name));
-    //         return;
-    //     }
-    // }
 
     cout << ".data\n";
 
@@ -684,26 +570,21 @@ void Visit(const koopa_raw_global_alloc_t &global_allocInst, const koopa_raw_val
     cout << var_name << ":\n";
 
     if (global_allocInst.init->kind.tag == KOOPA_RVT_INTEGER)
-    {
         cout << ".word " << global_allocInst.init->kind.data.integer.value << endl;
-    }
     else
-    {
         cout << ".zero 4\n";
-    }
 
     mem_map_global.insert(make_pair(super_value, var_name));
 }
 
-// 访问指令-alloc
+// visit value - alloc
 void Visit_alloc(const koopa_raw_value_t &super_value)
 {
-    // 申请一块栈上的位置
     int pos = Find_stack();
     mem_map_stack.insert(make_pair(super_value, pos));
 }
 
-// 访问指令-load
+// visit value - load
 void Visit(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_value)
 {
     // /// Source.
@@ -715,15 +596,13 @@ void Visit(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_valu
 
     if (mem_map_stack.count(loadInst.src))
     {
-        // 如果load的东西是栈上的变量
-        // 返回值也要存到栈上其实等于啥也没干
-        // 所以直接把pair（super_value，src的pos）存进mem_map_stack就行了
+        // if load var on stack
+        // the return var will push back to stack
+        // do nothing but insert mem_map_stack
         mem_map_stack.insert(make_pair(super_value, mem_map_stack.find(loadInst.src)->second));
     }
     if (mem_map_global.count(loadInst.src))
     {
-        // 如果load的是全局变量
-        // 先la到reg，然后sw到栈上
         string reg = Find_reg();
         int pos = Find_stack();
         cout << "la " << reg << ", " << mem_map_global.find(loadInst.src)->second << endl;
@@ -734,7 +613,7 @@ void Visit(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_valu
     }
 }
 
-// 访问指令-store
+// visit value - store
 void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_value)
 {
     // /// Value.
@@ -744,7 +623,7 @@ void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_va
 
     string value_reg;
 
-    // 先把value弄到reg里面（也可能本来就在reg里面）
+    // put value in reg
     if (!(mem_map_reg.count(storeInst.value) || mem_map_stack.count(storeInst.value)))
         Visit(storeInst.value);
     assert(mem_map_reg.count(storeInst.value) || mem_map_stack.count(storeInst.value));
@@ -759,7 +638,7 @@ void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_va
         cout << "lw " << value_reg << ", " << mem_map_stack.find(storeInst.value)->second << "(sp)" << endl;
     }
 
-    // 然后sw进dest（目前dest应该只能是栈上的变量或者全局变量）
+    // sw reg to dest
     if (!(mem_map_stack.count(storeInst.dest) || mem_map_global.count(storeInst.dest)))
         Visit(storeInst.dest);
     assert(mem_map_stack.count(storeInst.dest) || mem_map_global.count(storeInst.dest));
@@ -779,7 +658,7 @@ void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_va
     Free_reg(value_reg);
 }
 
-// 访问指令-br
+// visit value - br
 void Visit(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_value)
 {
     // typedef struct {
@@ -849,7 +728,7 @@ void Visit(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_valu
         Visit(brInst.false_bb, false_Label);
 }
 
-// 访问指令-jump
+// visit value - jump
 void Visit(const koopa_raw_jump_t &jumpInst, const koopa_raw_value_t &super_value)
 {
     // typedef struct {
@@ -880,7 +759,7 @@ void Visit(const koopa_raw_jump_t &jumpInst, const koopa_raw_value_t &super_valu
         Visit(jumpInst.target, target_Label);
 }
 
-// 访问指令-call
+// visit value - call
 void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_value)
 {
     // typedef struct {
@@ -890,17 +769,14 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
     // koopa_raw_slice_t args;
     // } koopa_raw_call_t;
 
-    // TODO：
-    // 盲猜koopa_raw_slice_t args里面是一大堆exp的value
-
     assert(callInst.args.kind == KOOPA_RSIK_VALUE);
     for (int i = 0; i < callInst.args.len; i++)
     {
         koopa_raw_value_t arg_inst = (koopa_raw_value_t)callInst.args.buffer[i];
         if (!(mem_map_reg.count(arg_inst) || mem_map_stack.count(arg_inst)))
         {
-            // 先执行call，不然其他寄存器会被弄坏
-            // call回来的东西会直接存在栈上，所以不用担心返回值被弄坏
+            // do call first, or other param in reg will broken
+            // call's return value will store in stack, so it's safe
             if (arg_inst->kind.tag != KOOPA_RVT_CALL)
                 continue;
             Visit(arg_inst);
@@ -926,14 +802,12 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
             }
             else
             {
-                // TODO
-                // 这次要往栈顶存，方便上个函数来找
-                // 我的栈这样
+                // push to stack top like this:
                 // ...
                 // arg9
                 // arg8
-                // 下个函数的栈帧
-                // 位置是sp+(i-8)*4
+                // next func stack frame
+                // pos is sp+(i-8)*4
                 cout << "sw " << mem_map_reg.find(arg_inst)->second << ", " << (i - 8) * 4 << "(sp)" << endl;
             }
         }
@@ -952,7 +826,7 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
                 Free_reg(reg);
                 int pos = mem_map_stack.find(arg_inst)->second;
                 cout << "lw " << reg << ", " << pos << "(sp)" << endl;
-                // 位置是sp+(i-8)*4
+                // pos is sp+(i-8)*4
                 cout << "sw " << reg << ", " << (i - 8) * 4 << "(sp)" << endl;
             }
         }
@@ -967,7 +841,7 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
             a[i] = 0;
     }
 
-    // 存返回值-存到栈里保险一点
+    // store return value in stack
     int pos = Find_stack();
     cout << "sw a0, " << pos << "(sp)\n";
     mem_map_stack.insert(make_pair(super_value, pos));
@@ -975,16 +849,13 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
     return;
 }
 
-// 访问指令-func_arg
+// visit value - func_arg
 void Visit(const koopa_raw_func_arg_ref_t &func_arg_refInst, const koopa_raw_value_t &super_value)
 {
     // typedef struct {
     // /// Index.
     // size_t index;
     // } koopa_raw_func_arg_ref_t;
-
-    // cout << "douya "
-    //      << to_string(func_arg_refInst.index) << endl;
 
     if (func_arg_refInst.index < 8)
     {
@@ -995,42 +866,41 @@ void Visit(const koopa_raw_func_arg_ref_t &func_arg_refInst, const koopa_raw_val
     }
     else
     {
-        // sp+这个函数的大小+(index-8)*4
+        // (sp + stack size) + (index-8)*4
         int pos = save_stack_size.back() + (func_arg_refInst.index - 8) * 4;
         mem_map_stack.insert(make_pair(super_value, pos));
     }
     return;
 }
 
-// 访问 raw slice
+// visit raw slice
 void Visit(const koopa_raw_slice_t &slice)
 {
     for (size_t i = 0; i < slice.len; ++i)
     {
         auto ptr = slice.buffer[i];
-        // 根据 slice 的 kind 决定将 ptr 视作何种元素
+
         switch (slice.kind)
         {
         case KOOPA_RSIK_FUNCTION:
-            // 访问函数
+            // visit func
             Visit(reinterpret_cast<koopa_raw_function_t>(ptr));
             break;
         case KOOPA_RSIK_BASIC_BLOCK:
-            // 访问基本块
+            // visit bb
             Visit(reinterpret_cast<koopa_raw_basic_block_t>(ptr));
             break;
         case KOOPA_RSIK_VALUE:
-            // 访问指令
+            // visit value
             Visit(reinterpret_cast<koopa_raw_value_t>(ptr));
             break;
         default:
-            // 我们暂时不会遇到其他内容, 于是不对其做任何处理
             assert(false);
         }
     }
 }
 
-// 计算变量数量-基本块
+// count stack size - bb
 void Count_var(const koopa_raw_basic_block_t &bb)
 {
     // 计算所有指令的变量数量
@@ -1042,56 +912,55 @@ void Count_var(const koopa_raw_basic_block_t &bb)
     }
 }
 
-// 计算变量数量-指令
+// count stack size - value
 void Count_var(const koopa_raw_value_t &value)
 {
-    // 根据指令类型判断后续需要如何访问
     const auto &kind = value->kind;
     switch (kind.tag)
     {
     case KOOPA_RVT_RETURN:
-        // 访问 return 指令
+        // visit return
         Count_var(kind.data.ret, value);
         break;
     case KOOPA_RVT_INTEGER:
-        // 访问 integer 指令
+        // visit integer
         Count_var(kind.data.integer, value);
         break;
     case KOOPA_RVT_BINARY:
-        // 访问 binary 指令
+        // visit binary
         Count_var(kind.data.binary, value);
         break;
     case KOOPA_RVT_GLOBAL_ALLOC:
-        // 访问 global_alloc 指令
+        // visit global_alloc
         // 没啥用
         // Count_var(kind.data.global_alloc, value);
         break;
     case KOOPA_RVT_ALLOC:
-        // 访问 alloc 指令
+        // visit alloc
         Count_var_alloc(value);
         break;
     case KOOPA_RVT_LOAD:
-        // 访问 load 指令
+        // visit load
         Count_var(kind.data.load, value);
         break;
     case KOOPA_RVT_STORE:
-        // 访问 store 指令
+        // visit store
         Count_var(kind.data.store, value);
         break;
     case KOOPA_RVT_BRANCH:
-        // 访问 br 指令
+        // visit br
         Count_var(kind.data.branch, value);
         break;
     case KOOPA_RVT_JUMP:
-        // 访问 jump 指令
+        // visit jump
         Count_var(kind.data.jump, value);
         break;
     case KOOPA_RVT_CALL:
-        // 访问 call 指令
+        // visit call
         Count_var(kind.data.call, value);
         break;
     case KOOPA_RVT_FUNC_ARG_REF:
-        // 访问 func_arg 指令
+        // visit func_arg
         Count_var(kind.data.func_arg_ref, value);
         break;
     default:
@@ -1101,22 +970,22 @@ void Count_var(const koopa_raw_value_t &value)
     }
 }
 
-// 计算指令变量-return
+// count stack size - value - return
 void Count_var(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_value)
 {
     if (!retInst.value)
         return;
 
-    // 如果是常数，到时候直接li，不管了
+    // if const, will not use stack
     if (retInst.value->kind.tag == KOOPA_RVT_INTEGER)
         return;
 
-    // 如果不是，则先计算获取返回值所需要的位置
+    // count size for return value
     if (!(count_mem_map_reg.count(retInst.value) || count_mem_map_stack.count(retInst.value)))
         Count_var(retInst.value);
     assert(count_mem_map_reg.count(retInst.value) || count_mem_map_stack.count(retInst.value));
 
-    // 用完了这个返回值就可以把它从寄存器里去掉了
+    // free reg
     if (count_mem_map_reg.count(retInst.value))
     {
         Free_reg(count_mem_map_reg.find(retInst.value)->second);
@@ -1124,7 +993,7 @@ void Count_var(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super
     }
 }
 
-// 计算指令变量-integer
+// count stack size - value - integer
 void Count_var(const koopa_raw_integer_t &intInst, const koopa_raw_value_t &super_value)
 {
     string reg = Find_reg();
@@ -1132,7 +1001,7 @@ void Count_var(const koopa_raw_integer_t &intInst, const koopa_raw_value_t &supe
     return;
 }
 
-// 计算指令变量-binary
+// count stack size - value - binary
 void Count_var(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_value)
 {
     if (!(count_mem_map_reg.count(binaryInst.lhs) || count_mem_map_stack.count(binaryInst.lhs)))
@@ -1146,7 +1015,7 @@ void Count_var(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &su
     int stack_pos = Add_stack_count();
     count_mem_map_stack.insert(make_pair(super_value, stack_pos));
 
-    //删掉左右值
+    // delete reg
     if (count_mem_map_reg.count(binaryInst.lhs))
     {
         Free_reg(count_mem_map_reg.find(binaryInst.lhs)->second);
@@ -1159,14 +1028,14 @@ void Count_var(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &su
     }
 }
 
-// 计算指令变量-alloc
+// count stack size - value - alloc
 void Count_var_alloc(const koopa_raw_value_t &super_value)
 {
     int pos = Add_stack_count();
     count_mem_map_stack.insert(make_pair(super_value, pos));
 }
 
-// 计算指令变量-load
+// count stack size - value - load
 void Count_var(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_value)
 {
     if (!(count_mem_map_stack.count(loadInst.src) || mem_map_global.count(loadInst.src)))
@@ -1184,10 +1053,10 @@ void Count_var(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_
     }
 }
 
-// 计算指令变量-store
+// count stack size - value - store
 void Count_var(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_value)
 {
-    // 先把value弄到reg里面（也可能本来就在reg里面）
+    // count size for put value in reg
     if (!(count_mem_map_reg.count(storeInst.value) || count_mem_map_stack.count(storeInst.value)))
         Count_var(storeInst.value);
     assert(count_mem_map_reg.count(storeInst.value) || count_mem_map_stack.count(storeInst.value));
@@ -1198,20 +1067,20 @@ void Count_var(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &supe
         count_mem_map_reg.erase(storeInst.value);
     }
 
-    // 然后sw进dest（目前dest应该只能是栈上的变量或者全局变量）
+    // count size for sw reg in dest
     if (!(count_mem_map_stack.count(storeInst.dest) || mem_map_global.count(storeInst.dest)))
         Count_var(storeInst.dest);
     assert(count_mem_map_stack.count(storeInst.dest) || mem_map_global.count(storeInst.dest));
 }
 
-// 访问指令-br
+// count stack size - value - br
 void Count_var(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_value)
 {
     // cond
     if (!(count_mem_map_reg.count(brInst.cond) || count_mem_map_stack.count(brInst.cond)))
         Count_var(brInst.cond);
 
-    //删掉cond
+    // free cond reg
     if (count_mem_map_reg.count(brInst.cond))
     {
         Free_reg(count_mem_map_reg.find(brInst.cond)->second);
@@ -1232,13 +1101,13 @@ void Count_var(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_
     }
 }
 
-// 访问指令-jump
+// count stack size - value - jump
 void Count_var(const koopa_raw_jump_t &jumpInst, const koopa_raw_value_t &super_value)
 {
     return;
 }
 
-// 访问指令-call
+// count stack size - value - call
 void Count_var(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_value)
 {
     // typedef struct {
@@ -1252,14 +1121,14 @@ void Count_var(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_
     if (callInst.args.len > 8)
         Add_stack_count(callInst.args.len - 8);
 
-    //返回值也需要一个位置存（不一定有，但无所谓先存了再说）
+    // store return value need a pos
     int pos = Add_stack_count();
     count_mem_map_stack.insert(make_pair(super_value, pos));
 
     return;
 }
 
-// 访问指令-func_arg
+// count stack size - value - func_arg
 void Count_var(const koopa_raw_func_arg_ref_t &func_arg_refInst, const koopa_raw_value_t &super_value)
 {
     if (func_arg_refInst.index < 8)
@@ -1271,7 +1140,7 @@ void Count_var(const koopa_raw_func_arg_ref_t &func_arg_refInst, const koopa_raw
     }
     else
     {
-        // 在上一个函数的栈里面，反正就是一个位置，随便给他加进去
+        // in pre func's stack, not important in count stack size part
         count_mem_map_stack.insert(make_pair(super_value, 0));
     }
     return;

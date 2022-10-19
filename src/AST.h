@@ -14,35 +14,35 @@ using namespace std;
 static int count_block = 0;
 static int count_if = 0;
 
-// 为了break和continue知道自己要跳到哪里
+// now in which while - to which break and continue jump to
 extern deque<int> now_in_while;
 
 static int count_break_continue = 0;
 
-/**
- * count_var给我新建的临时变量计数并命名
- *  - 相应的非终结符AST中包含自己的名字name就是用这个命名
- *  - 如果那个符号不需要名字，比如是个常数，那name="#"
- */
+// count_var - name my tmp var
 static int count_var = 0;
 
 extern string tmp_b_type;
 
 extern Multi_Symbol_Map *top_symbol_map;
 
-// 所有 AST 的基类
+// BaseAST
 class BaseAST
 {
 public:
+  // name of AST node, "#" if no name (const exp...)
   string name = "#";
+
+  // val of AST node, for exp
   int val;
+
   virtual ~BaseAST() = default;
 
-  virtual void Dump() const = 0; // 输出调试用
+  virtual void Dump() const = 0; // debug
 
-  virtual void printIR(string &out) = 0; // 生成中间代码
+  virtual void printIR(string &out) = 0; // generate IR
 
-  virtual void list_the_param(string &out) = 0; // 列出参数，适用于FuncRParamsAST
+  virtual void list_the_param(string &out) = 0; // list the param，only overwrite in FuncRParamsAST
 };
 
 // ROOT - CompUnit
@@ -58,7 +58,7 @@ public:
 
   void printIR(string &out) override
   {
-    // 声明一下库函数：
+    // lib func declaration
     out += "decl @getint(): i32\n";
     out += "decl @getch(): i32\n";
     out += "decl @getarray(*i32): i32\n";
@@ -114,7 +114,7 @@ public:
 class FuncDefAST : public BaseAST
 {
 public:
-  string func_type = ""; // 目前只能是int - i32，或者void - 空
+  string func_type = ""; // int - "i32", void - ""
   string ident;
   unique_ptr<BaseAST> func_f_params = nullptr;
   unique_ptr<BaseAST> block;
@@ -213,7 +213,7 @@ public:
 class FuncFParamAST : public BaseAST
 {
 public:
-  string b_type; // 现在只能是int-i32
+  string b_type; // int - "i32"
   string ident;
 
   void Dump() const override
@@ -487,6 +487,7 @@ public:
     block->printIR(out);
     name = block->name;
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -520,7 +521,7 @@ public:
 
     if (exp->name == "#")
     {
-      // 如果exp就是个常数，提前优化掉分支
+      // exp is const
       out += "jump %const_if_" + to_string(if_else_id) + "\n";
       out += "\n%const_if_" + to_string(if_else_id) + ":\n";
       if (exp->val)
@@ -539,7 +540,7 @@ public:
     }
     else
     {
-      // exp 是一个%n 之类的
+      // exp is a var
       out += "br ";
       out += exp->name;
       out += ", %if_" + to_string(if_else_id);
@@ -561,6 +562,7 @@ public:
       out += "\n%end_" + to_string(if_else_id) + ":\n";
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -629,6 +631,7 @@ public:
       return;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -649,6 +652,7 @@ public:
     out += "\n%while_body_" + to_string(now_in_while.back()) + "_" + to_string(count_break_continue) + ":\n";
     count_break_continue++;
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -669,6 +673,7 @@ public:
     out += "\n%while_body_" + to_string(now_in_while.back()) + "_" + to_string(count_break_continue) + ":\n";
     count_break_continue++;
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -698,8 +703,7 @@ public:
     exp->printIR(out);
     if (exp->name == "#")
     {
-      // 如果exp就是个常数，提前优化掉分支
-
+      // exp is const
       if (exp->val)
       {
         // if(1)
@@ -712,11 +716,11 @@ public:
         }
         out += "\n%const_end_" + to_string(if_else_id) + ":\n";
       }
-      // if(0) 无事发生
+      // if(0) nothing
     }
     else
     {
-      // exp 是一个%n 之类的
+      // exp is a var
       out += "br ";
       out += exp->name;
       out += ", %if_" + to_string(if_else_id);
@@ -733,6 +737,7 @@ public:
       out += ":\n";
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -765,7 +770,7 @@ public:
     exp->printIR(out);
     if (exp->name == "#")
     {
-      // 如果exp就是个常数，提前优化掉分支
+      // exp is const
       out += "jump %const_if_" + to_string(if_else_id) + "\n";
       out += "\n%const_if_" + to_string(if_else_id) + ":\n";
       if (exp->val)
@@ -788,7 +793,7 @@ public:
     }
     else
     {
-      // exp 是一个%n 之类的
+      // exp is a var
       out += "br ";
       out += exp->name;
       out += ", %if_" + to_string(if_else_id);
@@ -811,6 +816,7 @@ public:
       out += ":\n";
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -824,6 +830,7 @@ public:
   {
     unary_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     unary_exp->printIR(out);
@@ -837,6 +844,7 @@ public:
       name = unary_exp->name;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -850,6 +858,7 @@ public:
   {
     add_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     add_exp->printIR(out);
@@ -863,6 +872,7 @@ public:
       name = add_exp->name;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -876,6 +886,7 @@ public:
   {
     lor_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     lor_exp->printIR(out);
@@ -889,6 +900,7 @@ public:
       name = lor_exp->name;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -904,6 +916,7 @@ public:
     exp->Dump();
     cout << ")";
   }
+
   void printIR(string &out) override
   {
     exp->printIR(out);
@@ -917,6 +930,7 @@ public:
       name = exp->name;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -930,11 +944,13 @@ public:
   {
     cout << number;
   }
+
   void printIR(string &out) override
   {
     name = "#";
     val = number;
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -948,6 +964,7 @@ public:
   {
     l_val->Dump();
   }
+
   void printIR(string &out) override
   {
     l_val->printIR(out);
@@ -967,6 +984,7 @@ public:
       count_var++;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -980,6 +998,7 @@ public:
   {
     primary_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     primary_exp->printIR(out);
@@ -993,6 +1012,7 @@ public:
       name = primary_exp->name;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1008,11 +1028,11 @@ public:
     cout << unary_op;
     unary_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     unary_exp->printIR(out);
 
-    //计算能计算的常量
     if (unary_exp->name == "#")
     {
       name = "#";
@@ -1055,11 +1075,12 @@ public:
       }
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
 // UnaryExp - ident "(" [func_r_params] ")"
-// 这个是函数调用
+// this is func call
 class UnaryExpAST_3 : public BaseAST
 {
 public:
@@ -1167,6 +1188,7 @@ public:
   {
     unary_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     unary_exp->printIR(out);
@@ -1180,6 +1202,7 @@ public:
       name = unary_exp->name;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1197,12 +1220,12 @@ public:
     cout << binary_op;
     unary_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     mul_exp->printIR(out);
     unary_exp->printIR(out);
 
-    //计算常量
     if (mul_exp->name == "#" && unary_exp->name == "#")
     {
       name = "#";
@@ -1249,6 +1272,7 @@ public:
     out += "\n";
     count_var++;
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1262,6 +1286,7 @@ public:
   {
     mul_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     mul_exp->printIR(out);
@@ -1275,6 +1300,7 @@ public:
       name = mul_exp->name;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1292,12 +1318,12 @@ public:
     cout << binary_op;
     mul_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     add_exp->printIR(out);
     mul_exp->printIR(out);
 
-    //计算常量
     if (add_exp->name == "#" && mul_exp->name == "#")
     {
       name = "#";
@@ -1338,6 +1364,7 @@ public:
     out += "\n";
     count_var++;
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1351,6 +1378,7 @@ public:
   {
     add_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     add_exp->printIR(out);
@@ -1364,6 +1392,7 @@ public:
       name = add_exp->name;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1382,10 +1411,11 @@ public:
     cout << cmp_op;
     add_exp->Dump();
   }
+
   void printIR(string &out) override
   {
 
-    //准备工作，让后面的switch可以工作
+    // prepare for switch
     if (cmp_op.length() >= 2)
     {
       type = cmp_op[0] + cmp_op[1];
@@ -1398,7 +1428,6 @@ public:
     rel_exp->printIR(out);
     add_exp->printIR(out);
 
-    //计算常量
     if (rel_exp->name == "#" && add_exp->name == "#")
     {
       name = "#";
@@ -1451,6 +1480,7 @@ public:
     out += "\n";
     count_var++;
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1464,6 +1494,7 @@ public:
   {
     rel_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     rel_exp->printIR(out);
@@ -1477,6 +1508,7 @@ public:
       name = rel_exp->name;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1494,12 +1526,12 @@ public:
     cout << eq_op;
     rel_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     eq_exp->printIR(out);
     rel_exp->printIR(out);
 
-    //计算常量
     if (eq_exp->name == "#" && rel_exp->name == "#")
     {
       name = "#";
@@ -1540,6 +1572,7 @@ public:
     out += "\n";
     count_var++;
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1553,6 +1586,7 @@ public:
   {
     eq_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     eq_exp->printIR(out);
@@ -1566,6 +1600,7 @@ public:
       name = eq_exp->name;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1582,6 +1617,7 @@ public:
     cout << "&&";
     eq_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     land_exp->printIR(out);
@@ -1649,6 +1685,7 @@ public:
       out += name + " = load " + tmp_var_name + "\n";
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1662,6 +1699,7 @@ public:
   {
     land_exp->Dump();
   }
+
   void printIR(string &out) override
   {
     land_exp->printIR(out);
@@ -1675,6 +1713,7 @@ public:
       name = land_exp->name;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1757,6 +1796,7 @@ public:
       out += name + " = load " + tmp_var_name + "\n";
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1777,6 +1817,7 @@ public:
   {
     const_decl->printIR(out);
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1805,7 +1846,7 @@ public:
 class ConstDeclAST : public BaseAST
 {
 public:
-  string b_type; // 目前只能是int
+  string b_type; // int - "i32"
   vector<unique_ptr<BaseAST>> *const_defs;
 
   void Dump() const override
@@ -1829,6 +1870,7 @@ public:
       const_defs->at(i)->printIR(out);
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1858,6 +1900,7 @@ public:
     const_tmp.def_block_id = count_block;
     top_symbol_map->insert(name, const_tmp);
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1878,6 +1921,7 @@ public:
     assert(const_exp->name == "#");
     val = const_exp->val;
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -1885,7 +1929,7 @@ public:
 class VarDeclAST : public BaseAST
 {
 public:
-  string b_type; // 目前只能是int
+  string b_type; // int - "i32"
   vector<unique_ptr<BaseAST>> *var_defs;
 
   void Dump() const override
@@ -1909,6 +1953,7 @@ public:
       var_defs->at(i)->printIR(out);
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -2019,7 +2064,7 @@ public:
       }
     }
   }
-  
+
   void list_the_param(string &out) override {}
 };
 
@@ -2047,6 +2092,7 @@ public:
       name = exp->name;
     }
   }
+
   void list_the_param(string &out) override {}
 };
 
@@ -2113,5 +2159,6 @@ public:
     assert(exp->name == "#");
     val = exp->val;
   }
+
   void list_the_param(string &out) override {}
 };
