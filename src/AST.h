@@ -419,13 +419,24 @@ public:
   {
     l_val->printIR(out);
     assert(l_val->name != "#");
+
+    string l_val_name = l_val->name;
+
+    if (l_val->name[0] == 'a')
+    {
+      // array
+      string l_val_name = "%ptr" + to_string(count_ptr);
+      count_ptr++;
+      out += l_val_name + " = getelemptr " + (l_val->name).substr(1, (l_val->name).length()) + ", 0\n";
+    }
+
     exp->printIR(out);
     if (exp->name == "#")
     {
       out += "store ";
       out += to_string(exp->val).c_str();
       out += ", ";
-      out += l_val->name;
+      out += l_val_name;
       out += "\n";
     }
     else
@@ -433,7 +444,7 @@ public:
       out += "store ";
       out += exp->name;
       out += ", ";
-      out += l_val->name;
+      out += l_val_name;
       out += "\n";
     }
   }
@@ -969,6 +980,16 @@ public:
   void printIR(string &out) override
   {
     l_val->printIR(out);
+
+    if (l_val->name[0] == 'a')
+    {
+      // array
+      name = (l_val->name).substr(1, (l_val->name).length());
+      name = "%ptr" + to_string(count_ptr);
+      count_ptr++;
+      out += name + " = getelemptr " + (l_val->name).substr(1, (l_val->name).length()) + ", 0\n";
+      return;
+    }
 
     if (l_val->name == "#")
     {
@@ -1976,12 +1997,70 @@ public:
     const_init_val->printIR(out);
 
     VarUnion const_tmp;
-    const_tmp.kind = var_kind_CONST;
-    const_tmp.type.type = b_type;
-    const_tmp.type.array_len.push_back(const_exp->val);
-    const_tmp.val.push_back(const_init_val->val);
-    const_tmp.def_block_id = count_block;
-    top_symbol_map->insert(name, const_tmp);
+    if (top_symbol_map->outer_map == nullptr)
+    {
+      const_tmp.kind = var_kind_CONST;
+      const_tmp.type.type = b_type;
+      const_tmp.type.array_len.push_back(const_exp->val);
+      const_tmp.val.push_back(const_init_val->val);
+      const_tmp.def_block_id = count_block;
+      top_symbol_map->insert(name, const_tmp);
+
+      string aggregate = "{";
+      for (int i = 0; i < const_exp->val; i++)
+      {
+        if (i < const_init_val->const_exps->size())
+        {
+          aggregate += to_string(const_init_val->const_exps->at(i)->val);
+        }
+        else
+        {
+          aggregate += "0";
+        }
+        if (i != const_exp->val - 1)
+        {
+          aggregate += ", ";
+        }
+      }
+      aggregate += "}";
+
+      out += "global " + name + "_" + to_string(count_block);
+      out += " = alloc [i32, " + to_string(const_exp->val) + "], " + aggregate + "\n";
+    }
+    else
+    {
+      const_tmp.kind = var_kind_CONST;
+      const_tmp.type.type = b_type;
+      const_tmp.type.array_len.push_back(const_exp->val);
+      const_tmp.val.push_back(const_init_val->val);
+      const_tmp.def_block_id = count_block;
+      top_symbol_map->insert(name, const_tmp);
+
+      out += name + "_" + to_string(count_block);
+      out += " = alloc [i32, " + to_string(const_exp->val) + "]\n";
+
+      for (int i = 0; i < const_exp->val; i++)
+      {
+        if (i < const_init_val->const_exps->size())
+        {
+          string ptr_name = "%ptr" + to_string(count_ptr);
+          out += ptr_name + " = getelemptr ";
+          out += name + "_" + to_string(count_block);
+          out += ", " + to_string(i) + "\n";
+          out += "store " + to_string(const_init_val->const_exps->at(i)->val) + ", " + ptr_name + "\n";
+          count_ptr++;
+        }
+        else
+        {
+          string ptr_name = "%ptr" + to_string(count_ptr);
+          out += "%ptr" + to_string(count_ptr) + " = getelemptr ";
+          out += name + "_" + to_string(count_block);
+          out += ", " + to_string(i) + "\n";
+          out += "store 0, " + ptr_name + "\n";
+          count_ptr++;
+        }
+      }
+    }
   }
 
   void list_the_param(string &out) override {}
@@ -2225,6 +2304,16 @@ public:
 
       out += name + "_" + to_string(count_block);
       out += " = alloc [i32, " + to_string(const_exp->val) + "]\n";
+
+      for (int i = 0; i < const_exp->val; i++)
+      {
+        string ptr_name = "%ptr" + to_string(count_ptr);
+        out += ptr_name + " = getelemptr ";
+        out += name + "_" + to_string(count_block);
+        out += ", " + to_string(i) + "\n";
+        out += "store 0, " + ptr_name + "\n";
+        count_ptr++;
+      }
     }
   }
 
@@ -2265,7 +2354,7 @@ public:
       top_symbol_map->insert(name, var_tmp);
 
       string aggregate = "{";
-      for (int i = 0; i <= const_exp->val; i++)
+      for (int i = 0; i < const_exp->val; i++)
       {
         if (i < init_val->exps->size())
         {
@@ -2275,7 +2364,7 @@ public:
         {
           aggregate += "0";
         }
-        if (i != const_exp->val)
+        if (i != const_exp->val - 1)
         {
           aggregate += ", ";
         }
@@ -2296,17 +2385,27 @@ public:
       out += name + "_" + to_string(count_block);
       out += " = alloc [i32, " + to_string(const_exp->val) + "]\n";
 
-      for (int i = 0; i <= const_exp->val; i++)
+      for (int i = 0; i < const_exp->val; i++)
       {
         if (i < init_val->exps->size())
         {
-          out += "%ptr" + to_string(count_ptr) + " = getelemptr ";
+          string ptr_name = "%ptr" + to_string(count_ptr);
+          out += ptr_name + " = getelemptr ";
           out += name + "_" + to_string(count_block);
           out += ", " + to_string(i) + "\n";
           if (init_val->exps->at(i)->name == "#")
-            out += "store " + to_string(init_val->exps->at(i)->val) + ", " + name + "_" + to_string(count_block) + "\n";
+            out += "store " + to_string(init_val->exps->at(i)->val) + ", " + ptr_name + "\n";
           else
-            out += "store " + init_val->exps->at(i)->name + ", " + name + "_" + to_string(count_block) + "\n";
+            out += "store " + init_val->exps->at(i)->name + ", " + ptr_name + "\n";
+          count_ptr++;
+        }
+        else
+        {
+          string ptr_name = "%ptr" + to_string(count_ptr);
+          out += ptr_name + " = getelemptr ";
+          out += name + "_" + to_string(count_block);
+          out += ", " + to_string(i) + "\n";
+          out += "store 0, " + ptr_name + "\n";
           count_ptr++;
         }
       }
@@ -2337,6 +2436,8 @@ public:
       name = "#";
       if (var_u.type.type == "i32" && var_u.type.array_len.size() == 0)
         val = (var_u.val)[0];
+      else
+        name = "a" + tmp_name + "_" + to_string(var_u.def_block_id);
     }
     else
     {
@@ -2355,7 +2456,10 @@ public:
       }
       else
       {
-        name = tmp_name + "_" + to_string(var_u.def_block_id);
+        if (var_u.type.type == "i32" && var_u.type.array_len.size() != 0)
+          name = "a" + tmp_name + "_" + to_string(var_u.def_block_id);
+        else
+          name = tmp_name + "_" + to_string(var_u.def_block_id);
       }
     }
   }
@@ -2383,43 +2487,14 @@ public:
     VarUnion var_u = top_symbol_map->find(tmp_name);
     assert(var_u.kind != var_kind_ERROR);
 
-    if (var_u.kind == var_kind_CONST)
-    {
-      name = "%" + to_string(count_var);
-      count_var++;
+    name = "%ptr" + to_string(count_ptr);
+    count_ptr++;
 
-      string tmp_ptr_name = "%ptr" + to_string(count_ptr);
-      count_ptr++;
-
-      out += tmp_ptr_name + " = getelemptr " + tmp_name + "_" + to_string(var_u.def_block_id);
-      if (exp->name == "#")
-        out += ", " + to_string(exp->val) + "\n";
-      else
-        out += ", " + exp->name + "\n";
-
-      out += name + " = load " + tmp_ptr_name;
-    }
-    // TODO
-    // else
-    // {
-    //   if (var_u.var_is_func_param == 1)
-    //   {
-    //     name = "%" + ident;
-    //     out += name + " = alloc i32\n";
-    //     out += "store " + tmp_name + ", " + name + "\n";
-    //     top_symbol_map->erase(tmp_name);
-    //     var_u.var_is_func_param = 2;
-    //     top_symbol_map->insert(tmp_name, var_u);
-    //   }
-    //   else if (var_u.var_is_func_param == 2)
-    //   {
-    //     name = "%" + ident;
-    //   }
-    //   else
-    //   {
-    //     name = tmp_name + "_" + to_string(var_u.def_block_id);
-    //   }
-    // }
+    out += name + " = getelemptr " + tmp_name + "_" + to_string(var_u.def_block_id);
+    if (exp->name == "#")
+      out += ", " + to_string(exp->val) + "\n";
+    else
+      out += ", " + exp->name + "\n";
   }
 
   void list_the_param(string &out) override {}

@@ -7,13 +7,16 @@ It used to be **SysY Make Template(https://github.com/pku-minic/sysy-make-templa
 ## Usage
 
 1. 挂载到docker
+   
    run in docker
 
 ```sh
 docker run -it --rm -v [Directory of this folder]:/root/compiler maxxing/compiler-dev bash
+cd compiler/
 ```
 
 2. make并运行build/compiler -koopa/riscv hello.c -o hello.koopa
+   
    make and run build/compiler -koopa/riscv hello.c -o hello.koopa
 
 ```sh
@@ -21,6 +24,7 @@ python3 make_run.py -r/k
 ```
 
 3. 本地测试所有目前做完的部分
+   
    local test
 
 ```sh

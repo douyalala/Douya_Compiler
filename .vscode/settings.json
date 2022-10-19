@@ -4,6 +4,8 @@
         "string": "cpp",
         "system_error": "cpp",
         "xlocale": "cpp",
-        "vector": "cpp"
+        "vector": "cpp",
+        "deque": "cpp",
+        "xstring": "cpp"
     }
 }

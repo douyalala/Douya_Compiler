@@ -1,101 +1,88 @@
-.data
-.globl a_0
-a_0:
-.word 10
+decl @getint(): i32
+decl @getch(): i32
+decl @getarray(*i32): i32
+decl @putint(i32)
+decl @putch(i32)
+decl @putarray(i32, *i32)
+decl @starttime()
+decl @stoptime()
 
-.text
-.globl inc
-inc:
-addi sp, sp, -16
-la t0, a_0
-lw t0, 0(t0)
-sw t0, 12(sp)
-lw t0, 12(sp)
-li t1, 1
-add t0, t0, t1
-sw t0, 8(sp)
-lw t0, 8(sp)
-la t1, a_0
-sw t0, 0(t1)
-la t0, a_0
-lw t0, 0(t0)
-sw t0, 4(sp)
-lw a0, 4(sp)
-addi sp, sp, 16
-ret
+fun @main(): i32 {
+%entry:
+@arr_2 = alloc [i32, 10]
+%ptr0 = getelemptr @arr_2, 0
+store 0, %ptr0
+%ptr1 = getelemptr @arr_2, 1
+store 0, %ptr1
+%ptr2 = getelemptr @arr_2, 2
+store 0, %ptr2
+%ptr3 = getelemptr @arr_2, 3
+store 0, %ptr3
+%ptr4 = getelemptr @arr_2, 4
+store 0, %ptr4
+%ptr5 = getelemptr @arr_2, 5
+store 0, %ptr5
+%ptr6 = getelemptr @arr_2, 6
+store 0, %ptr6
+%ptr7 = getelemptr @arr_2, 7
+store 0, %ptr7
+%ptr8 = getelemptr @arr_2, 8
+store 0, %ptr8
+%ptr9 = getelemptr @arr_2, 9
+store 0, %ptr9
+@n_2 = alloc i32
+%ptr10 = getelemptr @arr_2, 0
+%0 = call @getarray(%ptr10)
+store %0, @n_2
+@i_2 = alloc i32
+store 0, @i_2
+%1 = load @i_2
+%2 = lt %1, 10
+br %2, %while_body_0, %while_end_0
 
-.text
-.globl print_a
-print_a:
-addi sp, sp, -16
-sw ra, 12(sp)
-la t0, a_0
-lw t0, 0(t0)
-sw t0, 8(sp)
-lw a0, 8(sp)
-call putint
-sw a0, 4(sp)
-li t0, 10
-mv a0, t0
-call putch
-sw a0, 0(sp)
-lw ra, 12(sp)
-addi sp, sp, 16
-ret
+%while_entry_0:
+%3 = load @i_2
+%4 = lt %3, 10
+br %4, %while_body_0, %while_end_0
 
-.text
-.globl main
-main:
-addi sp, sp, -80
-sw ra, 76(sp)
-sw x0, 72(sp)
-lw t0, 72(sp)
-li t1, 10
-slt t0, t0, t1
-sw t0, 68(sp)
-lw t0, 68(sp)
-bnez t0, if_0
-j else_0
+%while_body_0:
+%5 = load @i_2
+%6 = load @n_2
+%7 = lt %5, %6
+br %7, %if_1, %else_1
 
-if_0:
-call inc
-sw a0, 64(sp)
-li t0, 1
-sw t0, 60(sp)
-lw t0, 60(sp)
-li t1, 2
-add t0, t0, t1
-sw t0, 56(sp)
-lw t0, 56(sp)
-sw t0, 60(sp)
-lw a0, 60(sp)
-call putint
-sw a0, 52(sp)
-li t0, 10
-mv a0, t0
-call putch
-sw a0, 48(sp)
-call print_a
-sw a0, 44(sp)
-lw t0, 72(sp)
-li t1, 1
-add t0, t0, t1
-sw t0, 40(sp)
-lw t0, 40(sp)
-sw t0, 72(sp)
-j jump_0
+%if_1:
+%8 = load @i_2
+%ptr11 = getelemptr @arr_2, %8
+%9 = load @i_2
+%ptr12 = getelemptr @arr_2, %9
+%10 = load %ptr12
+%11 = load @i_2
+%12 = add %10, %11
+store %12, %ptr11
+jump %end_1
 
-jump_0:
-lw t0, 72(sp)
-li t1, 10
-slt t0, t0, t1
-sw t0, 36(sp)
-lw t0, 36(sp)
-bnez t0, if_0
-j else_0
+%else_1:
+%13 = load @i_2
+%ptr13 = getelemptr @arr_2, %13
+%14 = load @i_2
+%15 = sub %14, 1
+%ptr14 = getelemptr @arr_2, %15
+%16 = load %ptr14
+%17 = load @i_2
+%18 = add %16, %17
+store %18, %ptr13
+jump %end_1
 
-else_0:
-li a0, 0
-lw ra, 76(sp)
-addi sp, sp, 80
-ret
+%end_1:
+%19 = load @i_2
+%20 = add %19, 1
+store %20, @i_2
+jump %while_entry_0
+
+%while_end_0:
+%21 = load @n_2
+%ptr15 = getelemptr @arr_2, 0
+call @putarray(%21, %ptr15)
+ret 0
+}
