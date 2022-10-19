@@ -61,6 +61,8 @@ void Visit(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_valu
 void Visit(const koopa_raw_jump_t &jumpInst, const koopa_raw_value_t &super_value);
 void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_value);
 void Visit(const koopa_raw_func_arg_ref_t &func_arg_refInst, const koopa_raw_value_t &super_value);
+void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_value_t &super_value);
+void Visit(const koopa_raw_aggregate_t &get_elem_ptrInst, const koopa_raw_value_t &super_value);
 
 void Count_var(const koopa_raw_basic_block_t &bb);
 void Count_var(const koopa_raw_value_t &value);
@@ -74,6 +76,8 @@ void Count_var(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_
 void Count_var(const koopa_raw_jump_t &jumpInst, const koopa_raw_value_t &super_value);
 void Count_var(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_value);
 void Count_var(const koopa_raw_func_arg_ref_t &func_arg_refInst, const koopa_raw_value_t &super_value);
+void Count_var(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_value_t &super_value);
+void Count_var(const koopa_raw_aggregate_t &get_elem_ptrInst, const koopa_raw_value_t &super_value);
 
 void Visit(const koopa_raw_slice_t &slice);
 
@@ -351,6 +355,12 @@ void Visit(const koopa_raw_value_t &value)
     case KOOPA_RVT_CALL:
         // visit jump
         Visit(kind.data.call, value);
+        break;
+    case KOOPA_RVT_AGGREGATE:
+        Visit(kind.data.aggregate, value);
+        break;
+    case KOOPA_RVT_GET_ELEM_PTR:
+        Visit(kind.data.get_elem_ptr, value);
         break;
     case KOOPA_RVT_FUNC_ARG_REF:
         // visit func_arg
@@ -873,6 +883,36 @@ void Visit(const koopa_raw_func_arg_ref_t &func_arg_refInst, const koopa_raw_val
     return;
 }
 
+// visit value - get_elem_ptr
+void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_value_t &super_value)
+{
+    // TODO
+
+    // typedef struct {
+    // /// Source.
+    // koopa_raw_value_t src;
+    // /// Index.
+    // koopa_raw_value_t index;
+    // } koopa_raw_get_elem_ptr_t;
+
+
+
+    assert(false);
+}
+
+// visit value - aggregate
+void Visit(const koopa_raw_aggregate_t &get_elem_ptrInst, const koopa_raw_value_t &super_value)
+{
+    // TODO
+
+    // typedef struct {
+    // /// Elements.
+    // koopa_raw_slice_t elems;
+    // } koopa_raw_aggregate_t;
+
+    assert(false);
+}
+
 // visit raw slice
 void Visit(const koopa_raw_slice_t &slice)
 {
@@ -899,6 +939,8 @@ void Visit(const koopa_raw_slice_t &slice)
         }
     }
 }
+
+
 
 // count stack size - bb
 void Count_var(const koopa_raw_basic_block_t &bb)
@@ -932,8 +974,7 @@ void Count_var(const koopa_raw_value_t &value)
         break;
     case KOOPA_RVT_GLOBAL_ALLOC:
         // visit global_alloc
-        // 没啥用
-        // Count_var(kind.data.global_alloc, value);
+        // do nothing
         break;
     case KOOPA_RVT_ALLOC:
         // visit alloc
@@ -963,8 +1004,17 @@ void Count_var(const koopa_raw_value_t &value)
         // visit func_arg
         Count_var(kind.data.func_arg_ref, value);
         break;
+    case KOOPA_RVT_AGGREGATE:
+        // TODO;
+        break;
+    case KOOPA_RVT_GET_ELEM_PTR:
+        // TODO;
+        break;
     default:
-        // 其他类型暂时遇不到
+        // what are these?
+        // KOOPA_RVT_GET_PTR
+        // KOOPA_RVT_BLOCK_ARG_REF
+        // KOOPA_RVT_UNDEF
         cout << kind.tag << endl;
         assert(false);
     }
@@ -1104,6 +1154,13 @@ void Count_var(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_
 // count stack size - value - jump
 void Count_var(const koopa_raw_jump_t &jumpInst, const koopa_raw_value_t &super_value)
 {
+    // target
+    if (!count_mem_map_block.count(jumpInst.target))
+    {
+        count_mem_map_block.insert(jumpInst.target);
+        Count_var(jumpInst.target);
+    }
+
     return;
 }
 
@@ -1145,3 +1202,32 @@ void Count_var(const koopa_raw_func_arg_ref_t &func_arg_refInst, const koopa_raw
     }
     return;
 }
+
+// count stack size - value - get_elem_ptr
+void Count_var(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_value_t &super_value)
+{
+    // TODO
+
+    // typedef struct {
+    // /// Source.
+    // koopa_raw_value_t src;
+    // /// Index.
+    // koopa_raw_value_t index;
+    // } koopa_raw_get_elem_ptr_t;
+    
+    assert(false);
+}
+
+// count stack size - value - aggregate
+void Count_var(const koopa_raw_aggregate_t &get_elem_ptrInst, const koopa_raw_value_t &super_value)
+{
+    // TODO
+
+    // typedef struct {
+    // /// Elements.
+    // koopa_raw_slice_t elems;
+    // } koopa_raw_aggregate_t;
+
+    assert(false);
+}
+
