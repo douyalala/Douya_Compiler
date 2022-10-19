@@ -47,7 +47,7 @@ void add_sysy_func()
     string name = "@" + ident[i];
     VarUnion tmp_func;
     tmp_func.kind = var_kind_FUNC;
-    tmp_func.type = func_type[i];
+    tmp_func.type.type = func_type[i];
     top_symbol_map->insert(name, tmp_func);
   }
 }

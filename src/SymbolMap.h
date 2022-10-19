@@ -20,16 +20,23 @@ enum VarKind
     var_kind_ERROR
 };
 
+struct var_type
+{
+    string type;
+    vector<int> array_len;
+};
+
 struct VarUnion
 {
     VarKind kind;
-    string type;
+    var_type type;
     int def_block_id;
-    union
-    {
-        int val;
-        int var_is_func_param = 0;
-    };
+    // if const
+    // if type=[i32]: val={val}
+    // if type=[i32,n]: val={val_1,...,val_n}
+    vector<int> val;
+    // if var, if it is a func's param
+    int var_is_func_param = 0;
 };
 
 class Multi_Symbol_Map

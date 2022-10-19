@@ -22,7 +22,8 @@ static int count_break_continue = 0;
 // count_var - name my tmp var
 static int count_var = 0;
 
-extern string tmp_b_type;
+// count_ptr - name my tmp ptr
+static int count_ptr = 0;
 
 extern Multi_Symbol_Map *top_symbol_map;
 
@@ -110,7 +111,7 @@ public:
   }
 };
 
-// FuncDef - func_type ident "(" [func_f_params] ")" block;
+// FuncDef - func_type ident "(" [func_f_params] ")" block
 class FuncDefAST : public BaseAST
 {
 public:
@@ -135,7 +136,7 @@ public:
     name = "@" + ident;
     VarUnion tmp_func;
     tmp_func.kind = var_kind_FUNC;
-    tmp_func.type = func_type;
+    tmp_func.type.type = func_type;
     top_symbol_map->insert(name, tmp_func);
 
     Multi_Symbol_Map *new_top = new Multi_Symbol_Map;
@@ -177,7 +178,7 @@ public:
   }
 };
 
-// FuncFParams - func_f_param {"," func_f_param};
+// FuncFParams - func_f_param {"," func_f_param}
 class FuncFParamsAST : public BaseAST
 {
 public:
@@ -226,7 +227,7 @@ public:
     string param_name = "@" + ident;
     VarUnion param_tmp;
     param_tmp.kind = var_kind_VAR;
-    param_tmp.type = b_type;
+    param_tmp.type.type = b_type;
     param_tmp.def_block_id = count_block;
     param_tmp.var_is_func_param = 1;
     top_symbol_map->insert(param_name, param_tmp);
@@ -282,7 +283,7 @@ public:
   }
 };
 
-// BlockItem - decl | stmt;
+// BlockItem - decl | stmt
 class BlockItemAST : public BaseAST
 {
 public:
@@ -1104,7 +1105,7 @@ public:
 
     string fuc_name = "@" + ident;
     VarUnion tmp_func = top_symbol_map->find(fuc_name);
-    if (tmp_func.type != "")
+    if (tmp_func.type.type != "")
     {
       name = "%" + to_string(count_var);
       count_var++;
@@ -1123,7 +1124,7 @@ public:
   }
 };
 
-// FuncRParams ::= Exp {"," Expvoid list_the_param(string &out) override{}};
+// FuncRParams ::= Exp {"," Expvoid list_the_param(string &out) override{}}
 class FuncRParamsAST : public BaseAST
 {
 public:
@@ -1206,7 +1207,7 @@ public:
   void list_the_param(string &out) override {}
 };
 
-// MulExp - mul_exp ("*" | "/" | "%") unary_exp;
+// MulExp - mul_exp ("*" | "/" | "%") unary_exp
 class MulExpAST_2 : public BaseAST
 {
 public:
@@ -1842,16 +1843,15 @@ public:
   void list_the_param(string &out) override {}
 };
 
-// ConstDecl - "const" b_type const_def {"," const_def} ";";
+// ConstDecl - "const" int const_def {"," const_def} ";"
 class ConstDeclAST : public BaseAST
 {
 public:
-  string b_type; // int - "i32"
   vector<unique_ptr<BaseAST>> *const_defs;
 
   void Dump() const override
   {
-    cout << "const " << b_type << " ";
+    cout << "const i32 ";
     for (int i = 0; i < const_defs->size(); i++)
     {
       const_defs->at(i)->Dump();
@@ -1866,7 +1866,6 @@ public:
   {
     for (int i = 0; i < const_defs->size(); i++)
     {
-      tmp_b_type = b_type;
       const_defs->at(i)->printIR(out);
     }
   }
@@ -1874,38 +1873,8 @@ public:
   void list_the_param(string &out) override {}
 };
 
-// ConstDef - ident "=" const_init_val;
-class ConstDefAST : public BaseAST
-{
-public:
-  string ident;
-  unique_ptr<BaseAST> const_init_val;
-
-  void Dump() const override
-  {
-    cout << ident << " = ";
-    const_init_val->Dump();
-  }
-
-  void printIR(string &out) override
-  {
-    name = "@" + ident;
-    string b_type = tmp_b_type;
-    const_init_val->printIR(out);
-    assert(const_init_val->name == "#");
-    VarUnion const_tmp;
-    const_tmp.kind = var_kind_CONST;
-    const_tmp.type = b_type;
-    const_tmp.val = const_init_val->val;
-    const_tmp.def_block_id = count_block;
-    top_symbol_map->insert(name, const_tmp);
-  }
-
-  void list_the_param(string &out) override {}
-};
-
-// ConstInitVal - const_exp;
-class ConstInitValAST : public BaseAST
+// ConstInitVal - const_exp
+class ConstInitValAST_1 : public BaseAST
 {
 public:
   unique_ptr<BaseAST> const_exp;
@@ -1925,16 +1894,108 @@ public:
   void list_the_param(string &out) override {}
 };
 
-// VarDecl - b_type var_def {"," var_def} ";";
+// ConstInitVal - "{" [const_exp {"," const_exp}] "}"
+class ConstInitValAST_2 : public BaseAST
+{
+public:
+  vector<unique_ptr<BaseAST>> *const_exps;
+
+  void Dump() const override
+  {
+    for (int i = 0; i < const_exps->size(); i++)
+    {
+      const_exps->at(i)->Dump();
+      cout << ", ";
+    }
+  }
+
+  void printIR(string &out) override
+  {
+    for (int i = 0; i < const_exps->size(); i++)
+    {
+      const_exps->at(i)->printIR(out);
+      assert(const_exps->at(i)->name == "#");
+    }
+  }
+
+  void list_the_param(string &out) override {}
+};
+
+// ConstDef - ident "=" const_init_val
+class ConstDefAST_1 : public BaseAST
+{
+public:
+  string ident;
+  unique_ptr<BaseAST> const_init_val;
+
+  void Dump() const override
+  {
+    cout << ident << " = ";
+    const_init_val->Dump();
+  }
+
+  void printIR(string &out) override
+  {
+    name = "@" + ident;
+    string b_type = "i32";
+    const_init_val->printIR(out);
+    assert(const_init_val->name == "#");
+    VarUnion const_tmp;
+    const_tmp.kind = var_kind_CONST;
+    const_tmp.type.type = b_type;
+    const_tmp.val.push_back(const_init_val->val);
+    const_tmp.def_block_id = count_block;
+    top_symbol_map->insert(name, const_tmp);
+  }
+
+  void list_the_param(string &out) override {}
+};
+
+// ConstDef - ident "[" const_exp "]" "=" const_init_val
+class ConstDefAST_2 : public BaseAST
+{
+public:
+  string ident;
+  unique_ptr<BaseAST> const_exp;
+  unique_ptr<ConstInitValAST_2> const_init_val;
+
+  void Dump() const override
+  {
+    cout << ident << " = ";
+    const_init_val->Dump();
+  }
+
+  void printIR(string &out) override
+  {
+    name = "@" + ident;
+    string b_type = "i32";
+
+    const_exp->printIR(out);
+    assert(const_exp->name == "#");
+
+    const_init_val->printIR(out);
+
+    VarUnion const_tmp;
+    const_tmp.kind = var_kind_CONST;
+    const_tmp.type.type = b_type;
+    const_tmp.type.array_len.push_back(const_exp->val);
+    const_tmp.val.push_back(const_init_val->val);
+    const_tmp.def_block_id = count_block;
+    top_symbol_map->insert(name, const_tmp);
+  }
+
+  void list_the_param(string &out) override {}
+};
+
+// VarDecl - int var_def {"," var_def} ";"
 class VarDeclAST : public BaseAST
 {
 public:
-  string b_type; // int - "i32"
   vector<unique_ptr<BaseAST>> *var_defs;
 
   void Dump() const override
   {
-    cout << b_type << " ";
+    cout << " i32 ";
     for (int i = 0; i < var_defs->size(); i++)
     {
       var_defs->at(i)->Dump();
@@ -1949,8 +2010,61 @@ public:
   {
     for (int i = 0; i < var_defs->size(); i++)
     {
-      tmp_b_type = b_type;
       var_defs->at(i)->printIR(out);
+    }
+  }
+
+  void list_the_param(string &out) override {}
+};
+
+// InitVal - exp
+class InitValAST_1 : public BaseAST
+{
+public:
+  unique_ptr<BaseAST> exp;
+
+  void Dump() const override
+  {
+    exp->Dump();
+  }
+
+  void printIR(string &out) override
+  {
+    exp->printIR(out);
+    if (exp->name == "#")
+    {
+      name = "#";
+      val = exp->val;
+    }
+    else
+    {
+      name = exp->name;
+    }
+  }
+
+  void list_the_param(string &out) override {}
+};
+
+// InitVal - "{" [Exp {"," Exp}] "}"
+class InitValAST_2 : public BaseAST
+{
+public:
+  vector<unique_ptr<BaseAST>> *exps;
+
+  void Dump() const override
+  {
+    for (int i = 0; i < exps->size(); i++)
+    {
+      exps->at(i)->Dump();
+      cout << ",";
+    }
+  }
+
+  void printIR(string &out) override
+  {
+    for (int i = 0; i < exps->size(); i++)
+    {
+      exps->at(i)->printIR(out);
     }
   }
 
@@ -1971,13 +2085,13 @@ public:
   void printIR(string &out) override
   {
     name = "@" + ident;
-    string b_type = tmp_b_type;
+    string b_type = "i32";
 
     VarUnion var_tmp;
     if (top_symbol_map->outer_map == nullptr)
     {
       var_tmp.kind = var_kind_NOT_INIT_GLOBAL_VAR;
-      var_tmp.type = b_type;
+      var_tmp.type.type = b_type;
       var_tmp.def_block_id = count_block;
       var_tmp.var_is_func_param = 0;
       top_symbol_map->insert(name, var_tmp);
@@ -1988,7 +2102,7 @@ public:
     else
     {
       var_tmp.kind = var_kind_VAR;
-      var_tmp.type = b_type;
+      var_tmp.type.type = b_type;
       var_tmp.def_block_id = count_block;
       top_symbol_map->insert(name, var_tmp);
 
@@ -2000,7 +2114,7 @@ public:
   void list_the_param(string &out) override {}
 };
 
-// VarDef - ident "=" init_val;
+// VarDef - ident "=" init_val
 class VarDefAST_2 : public BaseAST
 {
 public:
@@ -2016,13 +2130,13 @@ public:
   void printIR(string &out) override
   {
     VarUnion var_tmp;
-    string b_type = tmp_b_type;
+    string b_type = "i32";
     name = "@" + ident;
 
     if (top_symbol_map->outer_map == nullptr)
     {
       var_tmp.kind = var_kind_INIT_GLOBAL_VAR;
-      var_tmp.type = b_type;
+      var_tmp.type.type = b_type;
       var_tmp.def_block_id = count_block;
 
       init_val->printIR(out);
@@ -2037,7 +2151,7 @@ public:
     else
     {
       var_tmp.kind = var_kind_VAR;
-      var_tmp.type = b_type;
+      var_tmp.type.type = b_type;
       var_tmp.def_block_id = count_block;
       top_symbol_map->insert(name, var_tmp);
 
@@ -2068,36 +2182,142 @@ public:
   void list_the_param(string &out) override {}
 };
 
-// InitVal - exp;
-class InitValAST : public BaseAST
+// VarDef - ident "[" const_exp "]"
+class VarDefAST_3 : public BaseAST
 {
 public:
-  unique_ptr<BaseAST> exp;
+  string ident;
+  unique_ptr<BaseAST> const_exp;
 
   void Dump() const override
   {
-    exp->Dump();
+    cout << ident;
   }
 
   void printIR(string &out) override
   {
-    exp->printIR(out);
-    if (exp->name == "#")
+    name = "@" + ident;
+    string b_type = "i32";
+
+    const_exp->printIR(out);
+    assert(const_exp->name == "#");
+
+    VarUnion var_tmp;
+    if (top_symbol_map->outer_map == nullptr)
     {
-      name = "#";
-      val = exp->val;
+      var_tmp.kind = var_kind_NOT_INIT_GLOBAL_VAR;
+      var_tmp.type.type = b_type;
+      var_tmp.type.array_len.push_back(const_exp->val);
+      var_tmp.def_block_id = count_block;
+      var_tmp.var_is_func_param = 0;
+      top_symbol_map->insert(name, var_tmp);
+
+      out += "global " + name + "_" + to_string(count_block);
+      out += " = alloc [i32, " + to_string(const_exp->val) + "], zeroinit\n";
     }
     else
     {
-      name = exp->name;
+      var_tmp.kind = var_kind_VAR;
+      var_tmp.type.type = b_type;
+      var_tmp.type.array_len.push_back(const_exp->val);
+      var_tmp.def_block_id = count_block;
+      top_symbol_map->insert(name, var_tmp);
+
+      out += name + "_" + to_string(count_block);
+      out += " = alloc [i32, " + to_string(const_exp->val) + "]\n";
     }
   }
 
   void list_the_param(string &out) override {}
 };
 
-// LVal - ident;
-class LValAST : public BaseAST
+// VarDef - ident "[" const_exp "]" "=" init_val
+class VarDefAST_4 : public BaseAST
+{
+public:
+  string ident;
+  unique_ptr<BaseAST> const_exp;
+  unique_ptr<InitValAST_2> init_val;
+
+  void Dump() const override
+  {
+    cout << ident;
+  }
+
+  void printIR(string &out) override
+  {
+    name = "@" + ident;
+    string b_type = "i32";
+
+    const_exp->printIR(out);
+    assert(const_exp->name == "#");
+
+    init_val->printIR(out);
+
+    VarUnion var_tmp;
+    if (top_symbol_map->outer_map == nullptr)
+    {
+      var_tmp.kind = var_kind_NOT_INIT_GLOBAL_VAR;
+      var_tmp.type.type = b_type;
+      var_tmp.type.array_len.push_back(const_exp->val);
+      var_tmp.def_block_id = count_block;
+      var_tmp.var_is_func_param = 0;
+      top_symbol_map->insert(name, var_tmp);
+
+      string aggregate = "{";
+      for (int i = 0; i <= const_exp->val; i++)
+      {
+        if (i < init_val->exps->size())
+        {
+          aggregate += to_string(init_val->exps->at(i)->val);
+        }
+        else
+        {
+          aggregate += "0";
+        }
+        if (i != const_exp->val)
+        {
+          aggregate += ", ";
+        }
+      }
+      aggregate += "}";
+
+      out += "global " + name + "_" + to_string(count_block);
+      out += " = alloc [i32, " + to_string(const_exp->val) + "], " + aggregate + "\n";
+    }
+    else
+    {
+      var_tmp.kind = var_kind_VAR;
+      var_tmp.type.type = b_type;
+      var_tmp.type.array_len.push_back(const_exp->val);
+      var_tmp.def_block_id = count_block;
+      top_symbol_map->insert(name, var_tmp);
+
+      out += name + "_" + to_string(count_block);
+      out += " = alloc [i32, " + to_string(const_exp->val) + "]\n";
+
+      for (int i = 0; i <= const_exp->val; i++)
+      {
+        if (i < init_val->exps->size())
+        {
+          out += "%ptr" + to_string(count_ptr) + " = getelemptr ";
+          out += name + "_" + to_string(count_block);
+          out += ", " + to_string(i) + "\n";
+          if (init_val->exps->at(i)->name == "#")
+            out += "store " + to_string(init_val->exps->at(i)->val) + ", " + name + "_" + to_string(count_block) + "\n";
+          else
+            out += "store " + init_val->exps->at(i)->name + ", " + name + "_" + to_string(count_block) + "\n";
+          count_ptr++;
+        }
+      }
+    }
+  }
+
+  void list_the_param(string &out) override {}
+};
+
+// LVal - ident
+class LValAST_1 : public BaseAST
 {
 public:
   string ident;
@@ -2115,7 +2335,8 @@ public:
     if (var_u.kind == var_kind_CONST)
     {
       name = "#";
-      val = var_u.val;
+      if (var_u.type.type == "i32" && var_u.type.array_len.size() == 0)
+        val = (var_u.val)[0];
     }
     else
     {
@@ -2137,6 +2358,68 @@ public:
         name = tmp_name + "_" + to_string(var_u.def_block_id);
       }
     }
+  }
+
+  void list_the_param(string &out) override {}
+};
+
+// LVal - IDENT "[" Exp "]"
+class LValAST_2 : public BaseAST
+{
+public:
+  string ident;
+  unique_ptr<BaseAST> exp;
+
+  void Dump() const override
+  {
+    cout << ident;
+  }
+
+  void printIR(string &out) override
+  {
+    exp->printIR(out);
+
+    string tmp_name = "@" + ident;
+    VarUnion var_u = top_symbol_map->find(tmp_name);
+    assert(var_u.kind != var_kind_ERROR);
+
+    if (var_u.kind == var_kind_CONST)
+    {
+      name = "%" + to_string(count_var);
+      count_var++;
+
+      string tmp_ptr_name = "%ptr" + to_string(count_ptr);
+      count_ptr++;
+
+      out += tmp_ptr_name + " = getelemptr " + tmp_name + "_" + to_string(var_u.def_block_id);
+      if (exp->name == "#")
+        out += ", " + to_string(exp->val) + "\n";
+      else
+        out += ", " + exp->name + "\n";
+
+      out += name + " = load " + tmp_ptr_name;
+    }
+    // TODO
+    // else
+    // {
+    //   if (var_u.var_is_func_param == 1)
+    //   {
+    //     name = "%" + ident;
+    //     out += name + " = alloc i32\n";
+    //     out += "store " + tmp_name + ", " + name + "\n";
+    //     top_symbol_map->erase(tmp_name);
+    //     var_u.var_is_func_param = 2;
+    //     top_symbol_map->insert(tmp_name, var_u);
+    //   }
+    //   else if (var_u.var_is_func_param == 2)
+    //   {
+    //     name = "%" + ident;
+    //   }
+    //   else
+    //   {
+    //     name = tmp_name + "_" + to_string(var_u.def_block_id);
+    //   }
+    // }
   }
 
   void list_the_param(string &out) override {}
