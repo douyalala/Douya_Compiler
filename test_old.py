@@ -1,20 +1,22 @@
 import os
 import math
 count = 0
-cmd_lines = ["autotest -koopa -s lv1 /root/compiler 1>/null 2> test_logs/",
-             "autotest -riscv -s lv1 /root/compiler 1>/null 2> test_logs/",
-             "autotest -koopa -s lv3 /root/compiler 1>/null 2> test_logs/",
-             "autotest -riscv -s lv3 /root/compiler 1>/null 2> test_logs/",
-             "autotest -koopa -s lv4 /root/compiler 1>/null 2> test_logs/",
-             "autotest -riscv -s lv4 /root/compiler 1>/null 2> test_logs/",
-             "autotest -koopa -s lv5 /root/compiler 1>/null 2> test_logs/",
-             "autotest -riscv -s lv5 /root/compiler 1>/null 2> test_logs/",
-             "autotest -koopa -s lv6 /root/compiler 1>/null 2> test_logs/",
-             "autotest -riscv -s lv6 /root/compiler 1>/null 2> test_logs/",
-             "autotest -koopa -s lv7 /root/compiler 1>/null 2> test_logs/",
-             "autotest -riscv -s lv7 /root/compiler 1>/null 2> test_logs/",
-             "autotest -koopa -s lv8 /root/compiler 1>/null 2> test_logs/",
-             "autotest -riscv -s lv8 /root/compiler 1>/null 2> test_logs/"]
+cmd_lines = ["autotest -koopa -s lv1 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -riscv -s lv1 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -koopa -s lv3 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -riscv -s lv3 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -koopa -s lv4 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -riscv -s lv4 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -koopa -s lv5 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -riscv -s lv5 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -koopa -s lv6 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -riscv -s lv6 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -koopa -s lv7 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -riscv -s lv7 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -koopa -s lv8 /root/compiler 1>/dev/null 2> test_logs/",
+             "autotest -riscv -s lv8 /root/compiler 1>/dev/null 2> test_logs/", 
+             "autotest -koopa -s lv9 /root/compiler 1>/dev/null 2> test_logs/", 
+             "autotest -riscv -s lv9 /root/compiler 1>/dev/null 2> test_logs/"]
 
 ind = ["koopa", "riscv"]
 

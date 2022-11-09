@@ -3,7 +3,6 @@
 #include <iostream>
 #include <string>
 #include <cstring>
-#include <vector>
 #include <deque>
 #include <assert.h>
 #include <map>
@@ -27,11 +26,14 @@ static int count_ptr = 0;
 
 extern Multi_Symbol_Map *top_symbol_map;
 
+// the koopa IR
+extern string output_IR;
+
 // BaseAST
 class BaseAST
 {
 public:
-  // name of AST node, "#" if no name (const exp...)
+  // name of AST node, "#" if no name
   string name = "#";
 
   // val of AST node, for exp
@@ -39,11 +41,79 @@ public:
 
   virtual ~BaseAST() = default;
 
-  virtual void Dump() const = 0; // debug
+  // debug
+  virtual void Dump() const = 0;
 
-  virtual void printIR(string &out) = 0; // generate IR
+  // generate IR
+  virtual void printIR() = 0;
 
-  virtual void list_the_param(string &out) = 0; // list the param，only overwrite in FuncRParamsAST
+  // list the param，only overwrite in FuncRParamsAST
+  virtual void list_the_param() {}
+
+  // put array init val (complete) in a deque，only overwrite in ConstInitValAST_2, InitValAST_2
+  // BaseAst is a const_exp(ConstInitValAST_2) or exp(InitValAST_2) or a new BaseAST and its val is 0
+  virtual deque<BaseAST *> *get_array_aggregate(deque<int> array_len) { return nullptr; }
+
+  string get_array_type_in_IR(deque<int> array_len, int i)
+  {
+    if (array_len.size() == (i + 1))
+      return "[i32, " + to_string(array_len.at(i)) + "]";
+    else
+      return "[" + get_array_type_in_IR(array_len, i + 1) + ", " + to_string(array_len.at(i)) + "]";
+  }
+
+  // complete array init val -> string aggregate
+  string trans_aggregate(deque<int> array_len, deque<BaseAST *> *array_init_val)
+  {
+    int ind = 0;
+    deque<int> st;
+    string res;
+    for (int i = 0; i < array_len.size(); i++)
+    {
+      st.push_back(0);
+    }
+    while (st.size() != 0)
+    {
+      int layer = st.size();
+      int top = st.back();
+
+      // if in the deepest layer, add "{...}" to res
+      if (layer == array_len.size())
+      {
+        res += "{";
+        for (int i = 0; i < array_len.back(); i++, ind++)
+        {
+          if (i != 0)
+            res += ", ";
+          res += to_string(array_init_val->at(ind)->val);
+        }
+        res += "}";
+        st.pop_back();
+        if (st.size() != 0)
+        {
+          int pre_layer = st.back();
+          st.pop_back();
+          pre_layer++;
+          st.push_back(pre_layer);
+        }
+        continue;
+      }
+
+      // if this layer is complete, pop
+      if (top == array_len.at(layer))
+      {
+        res += "}";
+        st.pop_back();
+        continue;
+      }
+
+      if (top == 0)
+        res += "{";
+
+      st.push_back(0);
+    }
+    return res;
+  }
 };
 
 // ROOT - CompUnit
@@ -57,23 +127,19 @@ public:
     comp_unit->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     // lib func declaration
-    out += "decl @getint(): i32\n";
-    out += "decl @getch(): i32\n";
-    out += "decl @getarray(*i32): i32\n";
-    out += "decl @putint(i32)\n";
-    out += "decl @putch(i32)\n";
-    out += "decl @putarray(i32, *i32)\n";
-    out += "decl @starttime()\n";
-    out += "decl @stoptime()\n\n";
+    output_IR += "decl @getint(): i32\n";
+    output_IR += "decl @getch(): i32\n";
+    output_IR += "decl @getarray(*i32): i32\n";
+    output_IR += "decl @putint(i32)\n";
+    output_IR += "decl @putch(i32)\n";
+    output_IR += "decl @putarray(i32, *i32)\n";
+    output_IR += "decl @starttime()\n";
+    output_IR += "decl @stoptime()\n\n";
 
-    comp_unit->printIR(out);
-  }
-
-  void list_the_param(string &out) override
-  {
+    comp_unit->printIR();
   }
 };
 
@@ -95,19 +161,15 @@ public:
     cout << " }" << endl;
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
 
     if (comp_unit != nullptr)
     {
-      comp_unit->printIR(out);
-      out += "\n";
+      comp_unit->printIR();
+      output_IR += "\n";
     }
-    func_def_or_decl->printIR(out);
-  }
-
-  void list_the_param(string &out) override
-  {
+    func_def_or_decl->printIR();
   }
 };
 
@@ -131,7 +193,7 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     name = "@" + ident;
     VarUnion tmp_func;
@@ -145,36 +207,32 @@ public:
 
     count_block++;
 
-    out += "fun @";
-    out += ident;
-    out += "(";
+    output_IR += "fun @";
+    output_IR += ident;
+    output_IR += "(";
     if (func_f_params != nullptr)
     {
-      func_f_params->printIR(out);
+      func_f_params->printIR();
     }
-    out += ")";
+    output_IR += ")";
     if (func_type == "i32")
-      out += ": " + func_type;
-    out += " {\n";
+      output_IR += ": " + func_type;
+    output_IR += " {\n";
 
-    out += "%entry:\n";
+    output_IR += "%entry:\n";
 
-    block->printIR(out);
+    block->printIR();
 
     if (block->name != "ret")
     {
       if (func_type == "")
-        out += "ret\n";
+        output_IR += "ret\n";
       if (func_type == "i32")
-        out += "ret 0\n";
+        output_IR += "ret 0\n";
     }
-    out += "}\n";
+    output_IR += "}\n";
 
     top_symbol_map = top_symbol_map->outer_map;
-  }
-
-  void list_the_param(string &out) override
-  {
   }
 };
 
@@ -182,7 +240,7 @@ public:
 class FuncFParamsAST : public BaseAST
 {
 public:
-  vector<unique_ptr<BaseAST>> *func_f_params;
+  deque<unique_ptr<BaseAST>> *func_f_params;
 
   void Dump() const override
   {
@@ -195,18 +253,14 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     for (int i = 0; i < func_f_params->size(); i++)
     {
-      func_f_params->at(i)->printIR(out);
+      func_f_params->at(i)->printIR();
       if (i != func_f_params->size() - 1)
-        out += ", ";
+        output_IR += ", ";
     }
-  }
-
-  void list_the_param(string &out) override
-  {
   }
 };
 
@@ -222,7 +276,7 @@ public:
     cout << b_type << " " << ident;
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     string param_name = "@" + ident;
     VarUnion param_tmp;
@@ -232,11 +286,7 @@ public:
     param_tmp.var_is_func_param = 1;
     top_symbol_map->insert(param_name, param_tmp);
 
-    out += param_name + ": " + b_type;
-  }
-
-  void list_the_param(string &out) override
-  {
+    output_IR += param_name + ": " + b_type;
   }
 };
 
@@ -244,7 +294,7 @@ public:
 class BlockAST : public BaseAST
 {
 public:
-  vector<unique_ptr<BaseAST>> *block_items;
+  deque<unique_ptr<BaseAST>> *block_items;
 
   void Dump() const override
   {
@@ -258,7 +308,7 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     Multi_Symbol_Map *new_top = new Multi_Symbol_Map;
     new_top->outer_map = top_symbol_map;
@@ -267,7 +317,7 @@ public:
     count_block++;
     for (int i = 0; i < block_items->size(); i++)
     {
-      block_items->at(i)->printIR(out);
+      block_items->at(i)->printIR();
       if (block_items->at(i)->name == "ret")
       {
         name = "ret";
@@ -276,10 +326,6 @@ public:
     }
 
     top_symbol_map = top_symbol_map->outer_map;
-  }
-
-  void list_the_param(string &out) override
-  {
   }
 };
 
@@ -296,14 +342,10 @@ public:
     cout << "}";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    decl_or_stmt->printIR(out);
+    decl_or_stmt->printIR();
     name = decl_or_stmt->name;
-  }
-
-  void list_the_param(string &out) override
-  {
   }
 };
 
@@ -320,14 +362,10 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    match_stmt->printIR(out);
+    match_stmt->printIR();
     name = match_stmt->name;
-  }
-
-  void list_the_param(string &out) override
-  {
   }
 };
 
@@ -344,14 +382,10 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    unmatch_stmt->printIR(out);
+    unmatch_stmt->printIR();
     name = unmatch_stmt->name;
-  }
-
-  void list_the_param(string &out) override
-  {
   }
 };
 
@@ -369,33 +403,29 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     name = "ret";
     if (exp != nullptr)
     {
-      exp->printIR(out);
+      exp->printIR();
       if (exp->name == "#")
       {
-        out += "ret ";
-        out += (to_string(exp->val)).c_str();
-        out += "\n";
+        output_IR += "ret ";
+        output_IR += (to_string(exp->val));
+        output_IR += "\n";
       }
       else
       {
-        out += "ret ";
-        out += (exp->name).c_str();
-        out += "\n";
+        output_IR += "ret ";
+        output_IR += (exp->name);
+        output_IR += "\n";
       }
     }
     else
     {
-      out += "ret\n";
+      output_IR += "ret\n";
     }
-  }
-
-  void list_the_param(string &out) override
-  {
   }
 };
 
@@ -415,9 +445,9 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    l_val->printIR(out);
+    l_val->printIR();
     assert(l_val->name != "#");
 
     string l_val_name = l_val->name;
@@ -427,30 +457,26 @@ public:
       // array
       string l_val_name = "%ptr" + to_string(count_ptr);
       count_ptr++;
-      out += l_val_name + " = getelemptr " + (l_val->name).substr(1, (l_val->name).length()) + ", 0\n";
+      output_IR += l_val_name + " = getelemptr " + (l_val->name).substr(1, (l_val->name).length()) + ", 0\n";
     }
 
-    exp->printIR(out);
+    exp->printIR();
     if (exp->name == "#")
     {
-      out += "store ";
-      out += to_string(exp->val).c_str();
-      out += ", ";
-      out += l_val_name;
-      out += "\n";
+      output_IR += "store ";
+      output_IR += to_string(exp->val).c_str();
+      output_IR += ", ";
+      output_IR += l_val_name;
+      output_IR += "\n";
     }
     else
     {
-      out += "store ";
-      out += exp->name;
-      out += ", ";
-      out += l_val_name;
-      out += "\n";
+      output_IR += "store ";
+      output_IR += exp->name;
+      output_IR += ", ";
+      output_IR += l_val_name;
+      output_IR += "\n";
     }
-  }
-
-  void list_the_param(string &out) override
-  {
   }
 };
 
@@ -470,15 +496,13 @@ public:
     }
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     if (exp != nullptr)
     {
-      exp->printIR(out);
+      exp->printIR();
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // MatchStmt - block
@@ -494,13 +518,11 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    block->printIR(out);
+    block->printIR();
     name = block->name;
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // MatchStmt - "if" "(" exp ")" match_stmt "else" match_stmt
@@ -524,58 +546,56 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     int if_else_id = count_if;
     count_if++;
 
-    exp->printIR(out);
+    exp->printIR();
 
     if (exp->name == "#")
     {
       // exp is const
-      out += "jump %const_if_" + to_string(if_else_id) + "\n";
-      out += "\n%const_if_" + to_string(if_else_id) + ":\n";
+      output_IR += "jump %const_if_" + to_string(if_else_id) + "\n";
+      output_IR += "\n%const_if_" + to_string(if_else_id) + ":\n";
       if (exp->val)
       {
-        match_stmt_if->printIR(out);
+        match_stmt_if->printIR();
         if (match_stmt_if->name != "ret")
-          out += "jump %const_end_" + to_string(if_else_id) + "\n";
+          output_IR += "jump %const_end_" + to_string(if_else_id) + "\n";
       }
       else
       {
-        match_stmt_else->printIR(out);
+        match_stmt_else->printIR();
         if (match_stmt_else->name != "ret")
-          out += "jump %const_end_" + to_string(if_else_id) + "\n";
+          output_IR += "jump %const_end_" + to_string(if_else_id) + "\n";
       }
-      out += "\n%const_end_" + to_string(if_else_id) + ":\n";
+      output_IR += "\n%const_end_" + to_string(if_else_id) + ":\n";
     }
     else
     {
       // exp is a var
-      out += "br ";
-      out += exp->name;
-      out += ", %if_" + to_string(if_else_id);
-      out += ", %else_" + to_string(if_else_id);
-      out += "\n";
+      output_IR += "br ";
+      output_IR += exp->name;
+      output_IR += ", %if_" + to_string(if_else_id);
+      output_IR += ", %else_" + to_string(if_else_id);
+      output_IR += "\n";
 
-      out += "\n%if_" + to_string(if_else_id);
-      out += ":\n";
-      match_stmt_if->printIR(out);
+      output_IR += "\n%if_" + to_string(if_else_id);
+      output_IR += ":\n";
+      match_stmt_if->printIR();
       if (match_stmt_if->name != "ret")
-        out += "jump %end_" + to_string(if_else_id) + "\n";
+        output_IR += "jump %end_" + to_string(if_else_id) + "\n";
 
-      out += "\n%else_" + to_string(if_else_id);
-      out += ":\n";
-      match_stmt_else->printIR(out);
+      output_IR += "\n%else_" + to_string(if_else_id);
+      output_IR += ":\n";
+      match_stmt_else->printIR();
       if (match_stmt_else->name != "ret")
-        out += "jump %end_" + to_string(if_else_id) + "\n";
+        output_IR += "jump %end_" + to_string(if_else_id) + "\n";
 
-      out += "\n%end_" + to_string(if_else_id) + ":\n";
+      output_IR += "\n%end_" + to_string(if_else_id) + ":\n";
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // MatchStmt - "while" "(" exp ")" stmt
@@ -596,14 +616,14 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     int while_id = count_if;
     count_if++;
 
     now_in_while.push_back(while_id);
 
-    exp->printIR(out);
+    exp->printIR();
     if (exp->name == "#")
     {
       if (!exp->val)
@@ -616,35 +636,33 @@ public:
       else
       {
         // while(1)
-        out += "br 1, %while_body_" + to_string(while_id) + ", %while_end_" + to_string(while_id) + "\n";
-        out += "\n%while_entry_" + to_string(while_id) + ":\n";
-        out += "br 1, %while_body_" + to_string(while_id) + ", %while_end_" + to_string(while_id) + "\n";
-        out += "\n%while_body_" + to_string(while_id) + ":\n";
-        stmt->printIR(out);
+        output_IR += "br 1, %while_body_" + to_string(while_id) + ", %while_end_" + to_string(while_id) + "\n";
+        output_IR += "\n%while_entry_" + to_string(while_id) + ":\n";
+        output_IR += "br 1, %while_body_" + to_string(while_id) + ", %while_end_" + to_string(while_id) + "\n";
+        output_IR += "\n%while_body_" + to_string(while_id) + ":\n";
+        stmt->printIR();
         if (stmt->name != "ret")
-          out += "jump %while_entry_" + to_string(while_id) + "\n";
-        out += "\n%while_end_" + to_string(while_id) + ":\n";
+          output_IR += "jump %while_entry_" + to_string(while_id) + "\n";
+        output_IR += "\n%while_end_" + to_string(while_id) + ":\n";
         now_in_while.pop_back();
         return;
       }
     }
     else
     {
-      out += "br " + exp->name + ", " + "%while_body_" + to_string(while_id) + ", %while_end_" + to_string(while_id) + "\n";
-      out += "\n%while_entry_" + to_string(while_id) + ":\n";
-      exp->printIR(out);
-      out += "br " + exp->name + ", " + "%while_body_" + to_string(while_id) + ", %while_end_" + to_string(while_id) + "\n";
-      out += "\n%while_body_" + to_string(while_id) + ":\n";
-      stmt->printIR(out);
+      output_IR += "br " + exp->name + ", " + "%while_body_" + to_string(while_id) + ", %while_end_" + to_string(while_id) + "\n";
+      output_IR += "\n%while_entry_" + to_string(while_id) + ":\n";
+      exp->printIR();
+      output_IR += "br " + exp->name + ", " + "%while_body_" + to_string(while_id) + ", %while_end_" + to_string(while_id) + "\n";
+      output_IR += "\n%while_body_" + to_string(while_id) + ":\n";
+      stmt->printIR();
       if (stmt->name != "ret")
-        out += "jump %while_entry_" + to_string(while_id) + "\n";
-      out += "\n%while_end_" + to_string(while_id) + ":\n";
+        output_IR += "jump %while_entry_" + to_string(while_id) + "\n";
+      output_IR += "\n%while_end_" + to_string(while_id) + ":\n";
       now_in_while.pop_back();
       return;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // MatchStmt - "break;"
@@ -658,14 +676,12 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    out += "jump %while_end_" + to_string(now_in_while.back()) + "\n";
-    out += "\n%while_body_" + to_string(now_in_while.back()) + "_" + to_string(count_break_continue) + ":\n";
+    output_IR += "jump %while_end_" + to_string(now_in_while.back()) + "\n";
+    output_IR += "\n%while_body_" + to_string(now_in_while.back()) + "_" + to_string(count_break_continue) + ":\n";
     count_break_continue++;
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // MatchStmt - "continue;"
@@ -679,14 +695,12 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    out += "jump %while_entry_" + to_string(now_in_while.back()) + "\n";
-    out += "\n%while_body_" + to_string(now_in_while.back()) + "_" + to_string(count_break_continue) + ":\n";
+    output_IR += "jump %while_entry_" + to_string(now_in_while.back()) + "\n";
+    output_IR += "\n%while_body_" + to_string(now_in_while.back()) + "_" + to_string(count_break_continue) + ":\n";
     count_break_continue++;
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // UnMatchStmt - "if" "(" exp ")" stmt
@@ -707,50 +721,48 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     int if_else_id = count_if;
     count_if++;
 
-    exp->printIR(out);
+    exp->printIR();
     if (exp->name == "#")
     {
       // exp is const
       if (exp->val)
       {
         // if(1)
-        out += "jump %const_if_" + to_string(if_else_id) + "\n";
-        out += "\n%const_if_" + to_string(if_else_id) + ":\n";
-        stmt->printIR(out);
+        output_IR += "jump %const_if_" + to_string(if_else_id) + "\n";
+        output_IR += "\n%const_if_" + to_string(if_else_id) + ":\n";
+        stmt->printIR();
         if (stmt->name != "ret")
         {
-          out += "jump %const_end_" + to_string(if_else_id) + "\n";
+          output_IR += "jump %const_end_" + to_string(if_else_id) + "\n";
         }
-        out += "\n%const_end_" + to_string(if_else_id) + ":\n";
+        output_IR += "\n%const_end_" + to_string(if_else_id) + ":\n";
       }
       // if(0) nothing
     }
     else
     {
       // exp is a var
-      out += "br ";
-      out += exp->name;
-      out += ", %if_" + to_string(if_else_id);
-      out += ", %end_" + to_string(if_else_id);
-      out += "\n";
+      output_IR += "br ";
+      output_IR += exp->name;
+      output_IR += ", %if_" + to_string(if_else_id);
+      output_IR += ", %end_" + to_string(if_else_id);
+      output_IR += "\n";
 
-      out += "\n%if_" + to_string(if_else_id);
-      out += ":\n";
-      stmt->printIR(out);
+      output_IR += "\n%if_" + to_string(if_else_id);
+      output_IR += ":\n";
+      stmt->printIR();
       if (stmt->name != "ret")
-        out += "jump %end_" + to_string(if_else_id) + "\n";
+        output_IR += "jump %end_" + to_string(if_else_id) + "\n";
 
-      out += "\n%end_" + to_string(if_else_id);
-      out += ":\n";
+      output_IR += "\n%end_" + to_string(if_else_id);
+      output_IR += ":\n";
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // UnMatchStmt - "if" "(" exp ")" match_stmt "else" unmatch_stmt
@@ -774,62 +786,60 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     int if_else_id = count_if;
     count_if++;
 
-    exp->printIR(out);
+    exp->printIR();
     if (exp->name == "#")
     {
       // exp is const
-      out += "jump %const_if_" + to_string(if_else_id) + "\n";
-      out += "\n%const_if_" + to_string(if_else_id) + ":\n";
+      output_IR += "jump %const_if_" + to_string(if_else_id) + "\n";
+      output_IR += "\n%const_if_" + to_string(if_else_id) + ":\n";
       if (exp->val)
       {
-        match_stmt->printIR(out);
+        match_stmt->printIR();
         if (match_stmt->name != "ret")
         {
-          out += "jump %const_end_" + to_string(if_else_id) + "\n";
+          output_IR += "jump %const_end_" + to_string(if_else_id) + "\n";
         }
       }
       else
       {
-        unmatch_stmt->printIR(out);
+        unmatch_stmt->printIR();
         if (unmatch_stmt->name != "ret")
         {
-          out += "jump %const_end_" + to_string(if_else_id) + "\n";
+          output_IR += "jump %const_end_" + to_string(if_else_id) + "\n";
         }
       }
-      out += "\n%const_end_" + to_string(if_else_id) + ":\n";
+      output_IR += "\n%const_end_" + to_string(if_else_id) + ":\n";
     }
     else
     {
       // exp is a var
-      out += "br ";
-      out += exp->name;
-      out += ", %if_" + to_string(if_else_id);
-      out += ", %else_" + to_string(if_else_id);
-      out += "\n";
+      output_IR += "br ";
+      output_IR += exp->name;
+      output_IR += ", %if_" + to_string(if_else_id);
+      output_IR += ", %else_" + to_string(if_else_id);
+      output_IR += "\n";
 
-      out += "\n%if_" + to_string(if_else_id);
-      out += ":\n";
-      match_stmt->printIR(out);
+      output_IR += "\n%if_" + to_string(if_else_id);
+      output_IR += ":\n";
+      match_stmt->printIR();
       if (match_stmt->name != "ret")
-        out += "jump %end_" + to_string(if_else_id) + "\n";
+        output_IR += "jump %end_" + to_string(if_else_id) + "\n";
 
-      out += "\n%else_" + to_string(if_else_id);
-      out += ":\n";
-      unmatch_stmt->printIR(out);
+      output_IR += "\n%else_" + to_string(if_else_id);
+      output_IR += ":\n";
+      unmatch_stmt->printIR();
       if (unmatch_stmt->name != "ret")
-        out += "jump %end_" + to_string(if_else_id) + "\n";
+        output_IR += "jump %end_" + to_string(if_else_id) + "\n";
 
-      out += "\n%end_" + to_string(if_else_id);
-      out += ":\n";
+      output_IR += "\n%end_" + to_string(if_else_id);
+      output_IR += ":\n";
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // Exp - unary_exp
@@ -843,9 +853,9 @@ public:
     unary_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    unary_exp->printIR(out);
+    unary_exp->printIR();
     if (unary_exp->name == "#")
     {
       name = "#";
@@ -856,8 +866,6 @@ public:
       name = unary_exp->name;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // Exp - add_exp
@@ -871,9 +879,9 @@ public:
     add_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    add_exp->printIR(out);
+    add_exp->printIR();
     if (add_exp->name == "#")
     {
       name = "#";
@@ -884,8 +892,6 @@ public:
       name = add_exp->name;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // Exp - lor_exp
@@ -899,9 +905,9 @@ public:
     lor_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    lor_exp->printIR(out);
+    lor_exp->printIR();
     if (lor_exp->name == "#")
     {
       name = "#";
@@ -912,8 +918,6 @@ public:
       name = lor_exp->name;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // PrimaryExp - (exp)
@@ -929,9 +933,9 @@ public:
     cout << ")";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    exp->printIR(out);
+    exp->printIR();
     if (exp->name == "#")
     {
       name = "#";
@@ -942,8 +946,6 @@ public:
       name = exp->name;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // PrimaryExp - number
@@ -957,13 +959,11 @@ public:
     cout << number;
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     name = "#";
     val = number;
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // PrimaryExp - l_val
@@ -977,9 +977,9 @@ public:
     l_val->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    l_val->printIR(out);
+    l_val->printIR();
 
     if (l_val->name[0] == 'a')
     {
@@ -987,7 +987,7 @@ public:
       name = (l_val->name).substr(1, (l_val->name).length());
       name = "%ptr" + to_string(count_ptr);
       count_ptr++;
-      out += name + " = getelemptr " + (l_val->name).substr(1, (l_val->name).length()) + ", 0\n";
+      output_IR += name + " = getelemptr " + (l_val->name).substr(1, (l_val->name).length()) + ", 0\n";
       return;
     }
 
@@ -999,15 +999,13 @@ public:
     else
     {
       name = "%" + to_string(count_var);
-      out += name;
-      out += " = load ";
-      out += l_val->name;
-      out += "\n";
+      output_IR += name;
+      output_IR += " = load ";
+      output_IR += l_val->name;
+      output_IR += "\n";
       count_var++;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // UnaryExp - primary_exp
@@ -1021,9 +1019,9 @@ public:
     primary_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    primary_exp->printIR(out);
+    primary_exp->printIR();
     if (primary_exp->name == "#")
     {
       name = "#";
@@ -1034,8 +1032,6 @@ public:
       name = primary_exp->name;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // UnaryExp - unary_op unary_exp
@@ -1051,9 +1047,9 @@ public:
     unary_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    unary_exp->printIR(out);
+    unary_exp->printIR();
 
     if (unary_exp->name == "#")
     {
@@ -1080,25 +1076,23 @@ public:
         break;
       case '-':
         name = "%" + to_string(count_var);
-        out += name.c_str();
-        out += " = sub 0, ";
-        out += (unary_exp->name).c_str();
-        out += "\n";
+        output_IR += name.c_str();
+        output_IR += " = sub 0, ";
+        output_IR += (unary_exp->name).c_str();
+        output_IR += "\n";
         count_var++;
         break;
       case '!':
         name = "%" + to_string(count_var);
-        out += name.c_str();
-        out += " = eq 0, ";
-        out += (unary_exp->name).c_str();
-        out += "\n";
+        output_IR += name.c_str();
+        output_IR += " = eq 0, ";
+        output_IR += (unary_exp->name).c_str();
+        output_IR += "\n";
         count_var++;
         break;
       }
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // UnaryExp - ident "(" [func_r_params] ")"
@@ -1117,11 +1111,11 @@ public:
     cout << ")";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     if (func_r_params != nullptr)
     {
-      func_r_params->printIR(out);
+      func_r_params->printIR();
     }
 
     string fuc_name = "@" + ident;
@@ -1130,18 +1124,14 @@ public:
     {
       name = "%" + to_string(count_var);
       count_var++;
-      out += name + " = ";
+      output_IR += name + " = ";
     }
-    out += "call " + fuc_name + "(";
+    output_IR += "call " + fuc_name + "(";
     if (func_r_params != nullptr)
     {
-      func_r_params->list_the_param(out);
+      func_r_params->list_the_param();
     }
-    out += ")\n";
-  }
-
-  void list_the_param(string &out) override
-  {
+    output_IR += ")\n";
   }
 };
 
@@ -1149,7 +1139,7 @@ public:
 class FuncRParamsAST : public BaseAST
 {
 public:
-  vector<unique_ptr<BaseAST>> *exps = nullptr;
+  deque<unique_ptr<BaseAST>> *exps = nullptr;
 
   void Dump() const override
   {
@@ -1166,18 +1156,18 @@ public:
     }
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     if (exps != nullptr)
     {
       for (int i = 0; i < exps->size(); i++)
       {
-        exps->at(i)->printIR(out);
+        exps->at(i)->printIR();
       }
     }
   }
 
-  void list_the_param(string &out) override
+  void list_the_param() override
   {
     if (exps != nullptr)
     {
@@ -1185,15 +1175,15 @@ public:
       {
         if (exps->at(i)->name == "#")
         {
-          out += to_string(exps->at(i)->val);
+          output_IR += to_string(exps->at(i)->val);
         }
         else
         {
-          out += exps->at(i)->name;
+          output_IR += exps->at(i)->name;
         }
         if (i != exps->size() - 1)
         {
-          out += ", ";
+          output_IR += ", ";
         }
       }
     }
@@ -1211,9 +1201,9 @@ public:
     unary_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    unary_exp->printIR(out);
+    unary_exp->printIR();
     if (unary_exp->name == "#")
     {
       name = "#";
@@ -1224,8 +1214,6 @@ public:
       name = unary_exp->name;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // MulExp - mul_exp ("*" | "/" | "%") unary_exp
@@ -1243,10 +1231,10 @@ public:
     unary_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    mul_exp->printIR(out);
-    unary_exp->printIR(out);
+    mul_exp->printIR();
+    unary_exp->printIR();
 
     if (mul_exp->name == "#" && unary_exp->name == "#")
     {
@@ -1267,35 +1255,33 @@ public:
     }
 
     name = "%" + to_string(count_var);
-    out += name.c_str();
+    output_IR += name.c_str();
 
     switch (binary_op[0])
     {
     case '*':
-      out += " = mul ";
+      output_IR += " = mul ";
       break;
     case '/':
-      out += " = div ";
+      output_IR += " = div ";
       break;
     case '%':
-      out += " = mod ";
+      output_IR += " = mod ";
       break;
     }
 
     if (mul_exp->name == "#")
-      out += (to_string(mul_exp->val)).c_str();
+      output_IR += (to_string(mul_exp->val)).c_str();
     else
-      out += (mul_exp->name).c_str();
-    out += ", ";
+      output_IR += (mul_exp->name).c_str();
+    output_IR += ", ";
     if (unary_exp->name == "#")
-      out += (to_string(unary_exp->val)).c_str();
+      output_IR += (to_string(unary_exp->val)).c_str();
     else
-      out += (unary_exp->name).c_str();
-    out += "\n";
+      output_IR += (unary_exp->name).c_str();
+    output_IR += "\n";
     count_var++;
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // AddExp - mul_exp
@@ -1309,9 +1295,9 @@ public:
     mul_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    mul_exp->printIR(out);
+    mul_exp->printIR();
     if (mul_exp->name == "#")
     {
       name = "#";
@@ -1322,8 +1308,6 @@ public:
       name = mul_exp->name;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // AddExp - add_exp ("+" | "-") mul_exp;
@@ -1341,10 +1325,10 @@ public:
     mul_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    add_exp->printIR(out);
-    mul_exp->printIR(out);
+    add_exp->printIR();
+    mul_exp->printIR();
 
     if (add_exp->name == "#" && mul_exp->name == "#")
     {
@@ -1362,32 +1346,30 @@ public:
     }
 
     name = "%" + to_string(count_var);
-    out += name.c_str();
+    output_IR += name.c_str();
 
     switch (binary_op[0])
     {
     case '+':
-      out += " = add ";
+      output_IR += " = add ";
       break;
     case '-':
-      out += " = sub ";
+      output_IR += " = sub ";
       break;
     }
 
     if (add_exp->name == "#")
-      out += (to_string(add_exp->val)).c_str();
+      output_IR += (to_string(add_exp->val)).c_str();
     else
-      out += (add_exp->name).c_str();
-    out += ", ";
+      output_IR += (add_exp->name).c_str();
+    output_IR += ", ";
     if (mul_exp->name == "#")
-      out += (to_string(mul_exp->val)).c_str();
+      output_IR += (to_string(mul_exp->val)).c_str();
     else
-      out += (mul_exp->name).c_str();
-    out += "\n";
+      output_IR += (mul_exp->name).c_str();
+    output_IR += "\n";
     count_var++;
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // RelExp - add_exp
@@ -1401,9 +1383,9 @@ public:
     add_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    add_exp->printIR(out);
+    add_exp->printIR();
     if (add_exp->name == "#")
     {
       name = "#";
@@ -1414,8 +1396,6 @@ public:
       name = add_exp->name;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // RelExp - rel_exp ("<" | ">" | "<=" | ">=") add_exp
@@ -1434,7 +1414,7 @@ public:
     add_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
 
     // prepare for switch
@@ -1447,8 +1427,8 @@ public:
       type = cmp_op[0];
     }
 
-    rel_exp->printIR(out);
-    add_exp->printIR(out);
+    rel_exp->printIR();
+    add_exp->printIR();
 
     if (rel_exp->name == "#" && add_exp->name == "#")
     {
@@ -1472,38 +1452,36 @@ public:
     }
 
     name = "%" + to_string(count_var);
-    out += name.c_str();
+    output_IR += name.c_str();
 
     switch (type)
     {
     case '<':
-      out += " = lt ";
+      output_IR += " = lt ";
       break;
     case '>':
-      out += " = gt ";
+      output_IR += " = gt ";
       break;
     case '<' + '=':
-      out += " = le ";
+      output_IR += " = le ";
       break;
     case '>' + '=':
-      out += " = ge ";
+      output_IR += " = ge ";
       break;
     }
 
     if (rel_exp->name == "#")
-      out += (to_string(rel_exp->val)).c_str();
+      output_IR += (to_string(rel_exp->val)).c_str();
     else
-      out += (rel_exp->name).c_str();
-    out += ", ";
+      output_IR += (rel_exp->name).c_str();
+    output_IR += ", ";
     if (add_exp->name == "#")
-      out += (to_string(add_exp->val)).c_str();
+      output_IR += (to_string(add_exp->val)).c_str();
     else
-      out += (add_exp->name).c_str();
-    out += "\n";
+      output_IR += (add_exp->name).c_str();
+    output_IR += "\n";
     count_var++;
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // EqExp - rel_exp
@@ -1517,9 +1495,9 @@ public:
     rel_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    rel_exp->printIR(out);
+    rel_exp->printIR();
     if (rel_exp->name == "#")
     {
       name = "#";
@@ -1530,8 +1508,6 @@ public:
       name = rel_exp->name;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // EqExp - eq_exp ("==" | "!=") rel_exp
@@ -1549,10 +1525,10 @@ public:
     rel_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    eq_exp->printIR(out);
-    rel_exp->printIR(out);
+    eq_exp->printIR();
+    rel_exp->printIR();
 
     if (eq_exp->name == "#" && rel_exp->name == "#")
     {
@@ -1570,32 +1546,30 @@ public:
     }
 
     name = "%" + to_string(count_var);
-    out += name.c_str();
+    output_IR += name.c_str();
 
     switch (eq_op[0])
     {
     case '=':
-      out += " = eq ";
+      output_IR += " = eq ";
       break;
     case '!':
-      out += " = ne ";
+      output_IR += " = ne ";
       break;
     }
 
     if (eq_exp->name == "#")
-      out += (to_string(eq_exp->val)).c_str();
+      output_IR += (to_string(eq_exp->val)).c_str();
     else
-      out += (eq_exp->name).c_str();
-    out += ", ";
+      output_IR += (eq_exp->name).c_str();
+    output_IR += ", ";
     if (rel_exp->name == "#")
-      out += (to_string(rel_exp->val)).c_str();
+      output_IR += (to_string(rel_exp->val)).c_str();
     else
-      out += (rel_exp->name).c_str();
-    out += "\n";
+      output_IR += (rel_exp->name).c_str();
+    output_IR += "\n";
     count_var++;
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // LAndExp - eq_exp
@@ -1609,9 +1583,9 @@ public:
     eq_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    eq_exp->printIR(out);
+    eq_exp->printIR();
     if (eq_exp->name == "#")
     {
       name = "#";
@@ -1622,8 +1596,6 @@ public:
       name = eq_exp->name;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // LAndExp - land_exp "&&" eq_exp
@@ -1640,9 +1612,9 @@ public:
     eq_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    land_exp->printIR(out);
+    land_exp->printIR();
 
     if (land_exp->name == "#")
     {
@@ -1654,7 +1626,7 @@ public:
       }
       else
       {
-        eq_exp->printIR(out);
+        eq_exp->printIR();
         if (eq_exp->name == "#")
         {
           name = "#";
@@ -1665,7 +1637,7 @@ public:
         {
           name = "%" + to_string(count_var);
           count_var++;
-          out += name + " = ne 0, " + eq_exp->name + "\n";
+          output_IR += name + " = ne 0, " + eq_exp->name + "\n";
           return;
         }
       }
@@ -1678,37 +1650,35 @@ public:
       int if_else_id = count_if;
       count_if++;
 
-      out += tmp_var_name + " = alloc i32\n";
-      out += "br " + land_exp->name + ", %if_" + to_string(if_else_id) + ", %else_" + to_string(if_else_id) + "\n";
+      output_IR += tmp_var_name + " = alloc i32\n";
+      output_IR += "br " + land_exp->name + ", %if_" + to_string(if_else_id) + ", %else_" + to_string(if_else_id) + "\n";
 
-      out += "\n%if_" + to_string(if_else_id) + ":\n";
-      eq_exp->printIR(out);
+      output_IR += "\n%if_" + to_string(if_else_id) + ":\n";
+      eq_exp->printIR();
       if (eq_exp->name == "#")
       {
-        out += "store " + to_string((eq_exp->val) != 0) + ", " + tmp_var_name + "\n";
+        output_IR += "store " + to_string((eq_exp->val) != 0) + ", " + tmp_var_name + "\n";
       }
       else
       {
         string tmp_name = "%" + to_string(count_var);
         count_var++;
-        out += tmp_name + " = ne 0, " + eq_exp->name + "\n";
-        out += "store " + tmp_name + ", " + tmp_var_name + "\n";
+        output_IR += tmp_name + " = ne 0, " + eq_exp->name + "\n";
+        output_IR += "store " + tmp_name + ", " + tmp_var_name + "\n";
       }
-      out += "jump %end_" + to_string(if_else_id) + "\n";
+      output_IR += "jump %end_" + to_string(if_else_id) + "\n";
 
-      out += "\n%else_" + to_string(if_else_id) + ":\n";
-      out += "store 0, " + tmp_var_name + "\n";
-      out += "jump %end_" + to_string(if_else_id) + "\n";
+      output_IR += "\n%else_" + to_string(if_else_id) + ":\n";
+      output_IR += "store 0, " + tmp_var_name + "\n";
+      output_IR += "jump %end_" + to_string(if_else_id) + "\n";
 
-      out += "\n%end_" + to_string(if_else_id) + ":\n";
+      output_IR += "\n%end_" + to_string(if_else_id) + ":\n";
 
       name = "%" + to_string(count_var);
       count_var++;
-      out += name + " = load " + tmp_var_name + "\n";
+      output_IR += name + " = load " + tmp_var_name + "\n";
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // LOrExp - land_exp
@@ -1722,9 +1692,9 @@ public:
     land_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    land_exp->printIR(out);
+    land_exp->printIR();
     if (land_exp->name == "#")
     {
       name = "#";
@@ -1735,8 +1705,6 @@ public:
       name = land_exp->name;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // LOrExp - lor_exp "||" land_exp
@@ -1753,9 +1721,9 @@ public:
     land_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    lor_exp->printIR(out);
+    lor_exp->printIR();
 
     if (lor_exp->name == "#")
     {
@@ -1767,7 +1735,7 @@ public:
       }
       else
       {
-        land_exp->printIR(out);
+        land_exp->printIR();
         if (land_exp->name == "#")
         {
           name = "#";
@@ -1778,7 +1746,7 @@ public:
         {
           name = "%" + to_string(count_var);
           count_var++;
-          out += name + " = ne 0, " + land_exp->name + "\n";
+          output_IR += name + " = ne 0, " + land_exp->name + "\n";
           return;
         }
       }
@@ -1791,35 +1759,33 @@ public:
       int if_else_id = count_if;
       count_if++;
 
-      out += tmp_var_name + " = alloc i32\n";
+      output_IR += tmp_var_name + " = alloc i32\n";
 
-      out += "br " + lor_exp->name + ", %if_" + to_string(if_else_id) + ", %else_" + to_string(if_else_id) + "\n";
-      out += "\n%if_" + to_string(if_else_id) + ":\n";
-      out += "store 1, " + tmp_var_name + "\n";
-      out += "jump %end_" + to_string(if_else_id) + "\n";
-      out += "\n%else_" + to_string(if_else_id) + ":\n";
-      land_exp->printIR(out);
+      output_IR += "br " + lor_exp->name + ", %if_" + to_string(if_else_id) + ", %else_" + to_string(if_else_id) + "\n";
+      output_IR += "\n%if_" + to_string(if_else_id) + ":\n";
+      output_IR += "store 1, " + tmp_var_name + "\n";
+      output_IR += "jump %end_" + to_string(if_else_id) + "\n";
+      output_IR += "\n%else_" + to_string(if_else_id) + ":\n";
+      land_exp->printIR();
       if (land_exp->name == "#")
       {
-        out += "store " + to_string((land_exp->val) != 0) + ", " + tmp_var_name + "\n";
+        output_IR += "store " + to_string((land_exp->val) != 0) + ", " + tmp_var_name + "\n";
       }
       else
       {
         string tmp_name = "%" + to_string(count_var);
         count_var++;
-        out += tmp_name + " = ne 0, " + land_exp->name + "\n";
-        out += "store " + tmp_name + ", " + tmp_var_name + "\n";
+        output_IR += tmp_name + " = ne 0, " + land_exp->name + "\n";
+        output_IR += "store " + tmp_name + ", " + tmp_var_name + "\n";
       }
-      out += "jump %end_" + to_string(if_else_id) + "\n";
-      out += "\n%end_" + to_string(if_else_id) + ":\n";
+      output_IR += "jump %end_" + to_string(if_else_id) + "\n";
+      output_IR += "\n%end_" + to_string(if_else_id) + ":\n";
 
       name = "%" + to_string(count_var);
       count_var++;
-      out += name + " = load " + tmp_var_name + "\n";
+      output_IR += name + " = load " + tmp_var_name + "\n";
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // Decl - const_decl
@@ -1835,12 +1801,10 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    const_decl->printIR(out);
+    const_decl->printIR();
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // Decl - var_decl
@@ -1856,19 +1820,17 @@ public:
     cout << " }";
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    var_decl->printIR(out);
+    var_decl->printIR();
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // ConstDecl - "const" int const_def {"," const_def} ";"
 class ConstDeclAST : public BaseAST
 {
 public:
-  vector<unique_ptr<BaseAST>> *const_defs;
+  deque<unique_ptr<BaseAST>> *const_defs;
 
   void Dump() const override
   {
@@ -1883,15 +1845,13 @@ public:
     }
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     for (int i = 0; i < const_defs->size(); i++)
     {
-      const_defs->at(i)->printIR(out);
+      const_defs->at(i)->printIR();
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // ConstInitVal - const_exp
@@ -1905,41 +1865,96 @@ public:
     const_exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    const_exp->printIR(out);
+    const_exp->printIR();
     assert(const_exp->name == "#");
     val = const_exp->val;
   }
-
-  void list_the_param(string &out) override {}
 };
 
-// ConstInitVal - "{" [const_exp {"," const_exp}] "}"
+// TODO:
+// ConstInitVal - "{" [const_init_val {"," const_init_val}] "}"
 class ConstInitValAST_2 : public BaseAST
 {
 public:
-  vector<unique_ptr<BaseAST>> *const_exps;
+  deque<unique_ptr<BaseAST>> *const_init_vals;
 
   void Dump() const override
   {
-    for (int i = 0; i < const_exps->size(); i++)
+    for (int i = 0; i < const_init_vals->size(); i++)
     {
-      const_exps->at(i)->Dump();
+      const_init_vals->at(i)->Dump();
       cout << ", ";
     }
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    for (int i = 0; i < const_exps->size(); i++)
+    name = "{";
+    for (int i = 0; i < const_init_vals->size(); i++)
     {
-      const_exps->at(i)->printIR(out);
-      assert(const_exps->at(i)->name == "#");
+      const_init_vals->at(i)->printIR();
     }
   }
 
-  void list_the_param(string &out) override {}
+  deque<BaseAST *> *get_array_aggregate(deque<int> array_len) override
+  {
+    int length = 1;
+    for (int i = 0; i < array_len.size(); i++)
+    {
+      length *= array_len.at(i);
+    }
+
+    deque<BaseAST *> *res = new deque<BaseAST *>();
+    for (int i = 0; i < const_init_vals->size(); i++)
+    {
+      // is a number
+      if (const_init_vals->at(i)->name != "{")
+      {
+        res->push_back(const_init_vals->at(i).release());
+      }
+      // is a list
+      else
+      {
+        int tmp_layer = array_len.size() - 1;
+        int mul = array_len.at(tmp_layer);
+        assert(res->size() % array_len.at(tmp_layer) == 0);
+        while (1)
+        {
+          assert(tmp_layer != 0);
+          if ((res->size() % mul * array_len.at(tmp_layer - 1)) == 0)
+          {
+            mul *= array_len.at(tmp_layer - 1);
+            tmp_layer--;
+            continue;
+          }
+          else if ((res->size() % mul * array_len.at(tmp_layer - 1)) != 0)
+          {
+            break;
+          }
+        }
+        deque<int> tmp_arr_len;
+        for (; tmp_layer < array_len.size(); tmp_layer++)
+        {
+          tmp_arr_len.push_back(array_len.at(tmp_layer));
+        }
+        deque<BaseAST *> *inner_list = const_init_vals->at(i)->get_array_aggregate(tmp_arr_len);
+        for (int j = 0; j < inner_list->size(); j++)
+        {
+          res->push_back(inner_list->at(j));
+        }
+      }
+    }
+    while (res->size() < length)
+    {
+      BaseAST *zero = new ROOTAST();
+      zero->name = "#";
+      zero->val = 0;
+      res->push_back(zero);
+    }
+    return res;
+  }
 };
 
 // ConstDef - ident "=" const_init_val
@@ -1955,11 +1970,11 @@ public:
     const_init_val->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     name = "@" + ident;
     string b_type = "i32";
-    const_init_val->printIR(out);
+    const_init_val->printIR();
     assert(const_init_val->name == "#");
     VarUnion const_tmp;
     const_tmp.kind = var_kind_CONST;
@@ -1968,17 +1983,17 @@ public:
     const_tmp.def_block_id = count_block;
     top_symbol_map->insert(name, const_tmp);
   }
-
-  void list_the_param(string &out) override {}
 };
 
-// ConstDef - ident "[" const_exp "]" "=" const_init_val
+// TODO:
+// ConstDef - ident "[" const_exp "]" { "[" const_exp "]" } "=" const_init_val
+// this is (multi)array
 class ConstDefAST_2 : public BaseAST
 {
 public:
   string ident;
-  unique_ptr<BaseAST> const_exp;
-  unique_ptr<ConstInitValAST_2> const_init_val;
+  deque<unique_ptr<BaseAST>> *const_exps;
+  unique_ptr<BaseAST> const_init_val;
 
   void Dump() const override
   {
@@ -1986,91 +2001,78 @@ public:
     const_init_val->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     name = "@" + ident;
     string b_type = "i32";
 
-    const_exp->printIR(out);
-    assert(const_exp->name == "#");
+    for (int i = 0; i < const_exps->size(); i++)
+    {
+      const_exps->at(i)->printIR();
+      assert(const_exps->at(i)->name == "#");
+    }
 
-    const_init_val->printIR(out);
+    const_init_val->printIR();
 
     VarUnion const_tmp;
     if (top_symbol_map->outer_map == nullptr)
     {
       const_tmp.kind = var_kind_CONST;
       const_tmp.type.type = b_type;
-      const_tmp.type.array_len.push_back(const_exp->val);
+      for (int i = 0; i < const_exps->size(); i++)
+      {
+        const_tmp.type.array_len.push_back(const_exps->at(i)->val);
+      }
       const_tmp.val.push_back(const_init_val->val);
       const_tmp.def_block_id = count_block;
       top_symbol_map->insert(name, const_tmp);
 
-      string aggregate = "{";
-      for (int i = 0; i < const_exp->val; i++)
-      {
-        if (i < const_init_val->const_exps->size())
-        {
-          aggregate += to_string(const_init_val->const_exps->at(i)->val);
-        }
-        else
-        {
-          aggregate += "0";
-        }
-        if (i != const_exp->val - 1)
-        {
-          aggregate += ", ";
-        }
-      }
-      aggregate += "}";
+      deque<BaseAST *> *aggregate_ptr = const_init_val->get_array_aggregate(const_tmp.type.array_len);
+      assert(aggregate_ptr != nullptr);
 
-      out += "global " + name + "_" + to_string(count_block);
-      out += " = alloc [i32, " + to_string(const_exp->val) + "], " + aggregate + "\n";
+      string array_type = get_array_type_in_IR(const_tmp.type.array_len, 0);
+      string aggregate = trans_aggregate(const_tmp.type.array_len, aggregate_ptr);
+
+      output_IR += "global " + name + "_" + to_string(count_block);
+      output_IR += " = alloc " + array_type + ", " + aggregate + "\n";
     }
     else
     {
       const_tmp.kind = var_kind_CONST;
       const_tmp.type.type = b_type;
-      const_tmp.type.array_len.push_back(const_exp->val);
+      for (int i = 0; i < const_exps->size(); i++)
+      {
+        const_tmp.type.array_len.push_back(const_exps->at(i)->val);
+      }
       const_tmp.val.push_back(const_init_val->val);
       const_tmp.def_block_id = count_block;
       top_symbol_map->insert(name, const_tmp);
 
-      out += name + "_" + to_string(count_block);
-      out += " = alloc [i32, " + to_string(const_exp->val) + "]\n";
+      output_IR += name + "_" + to_string(count_block);
+      output_IR += " = alloc " + get_array_type_in_IR(const_tmp.type.array_len, 0) + "\n";
 
-      for (int i = 0; i < const_exp->val; i++)
+      deque<BaseAST *> *aggregate_ptr = const_init_val->get_array_aggregate(const_tmp.type.array_len);
+      assert(aggregate_ptr != nullptr);
+
+      for (int i = 0; i < aggregate_ptr->size(); i++)
       {
-        if (i < const_init_val->const_exps->size())
-        {
-          string ptr_name = "%ptr" + to_string(count_ptr);
-          out += ptr_name + " = getelemptr ";
-          out += name + "_" + to_string(count_block);
-          out += ", " + to_string(i) + "\n";
-          out += "store " + to_string(const_init_val->const_exps->at(i)->val) + ", " + ptr_name + "\n";
-          count_ptr++;
-        }
-        else
-        {
-          string ptr_name = "%ptr" + to_string(count_ptr);
-          out += "%ptr" + to_string(count_ptr) + " = getelemptr ";
-          out += name + "_" + to_string(count_block);
-          out += ", " + to_string(i) + "\n";
-          out += "store 0, " + ptr_name + "\n";
-          count_ptr++;
-        }
+
+        string ptr_name = "%ptr" + to_string(count_ptr);
+        output_IR += ptr_name + " = getelemptr ";
+        output_IR += name + "_" + to_string(count_block);
+        output_IR += ", " + to_string(i) + "\n";
+        output_IR += "store " + to_string(aggregate_ptr->at(i)->val) + ", " + ptr_name + "\n";
+        count_ptr++;
       }
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // VarDecl - int var_def {"," var_def} ";"
 class VarDeclAST : public BaseAST
 {
 public:
-  vector<unique_ptr<BaseAST>> *var_defs;
+  deque<unique_ptr<BaseAST>> *var_defs;
 
   void Dump() const override
   {
@@ -2085,15 +2087,13 @@ public:
     }
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     for (int i = 0; i < var_defs->size(); i++)
     {
-      var_defs->at(i)->printIR(out);
+      var_defs->at(i)->printIR();
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // InitVal - exp
@@ -2107,9 +2107,9 @@ public:
     exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    exp->printIR(out);
+    exp->printIR();
     if (exp->name == "#")
     {
       name = "#";
@@ -2120,34 +2120,90 @@ public:
       name = exp->name;
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
-// InitVal - "{" [Exp {"," Exp}] "}"
+// TODO:
+// InitVal - "{" [init_val {"," init_val}] "}"
 class InitValAST_2 : public BaseAST
 {
 public:
-  vector<unique_ptr<BaseAST>> *exps;
+  deque<unique_ptr<BaseAST>> *init_vals;
 
   void Dump() const override
   {
-    for (int i = 0; i < exps->size(); i++)
+    for (int i = 0; i < init_vals->size(); i++)
     {
-      exps->at(i)->Dump();
+      init_vals->at(i)->Dump();
       cout << ",";
     }
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    for (int i = 0; i < exps->size(); i++)
+    name = "{";
+    for (int i = 0; i < init_vals->size(); i++)
     {
-      exps->at(i)->printIR(out);
+      init_vals->at(i)->printIR();
     }
   }
 
-  void list_the_param(string &out) override {}
+  deque<BaseAST *> *get_array_aggregate(deque<int> array_len) override
+  {
+    int length = 1;
+    for (int i = 0; i < array_len.size(); i++)
+    {
+      length *= array_len.at(i);
+    }
+
+    deque<BaseAST *> *res = new deque<BaseAST *>();
+    for (int i = 0; i < init_vals->size(); i++)
+    {
+      // is a number
+      if (init_vals->at(i)->name != "{")
+      {
+        res->push_back(init_vals->at(i).release());
+      }
+      // is a list
+      else
+      {
+        int tmp_layer = array_len.size() - 1;
+        int mul = array_len.at(tmp_layer);
+        assert(res->size() % array_len.at(tmp_layer) == 0);
+        while (1)
+        {
+          assert(tmp_layer != 0);
+          if ((res->size() % mul * array_len.at(tmp_layer - 1)) == 0)
+          {
+            mul *= array_len.at(tmp_layer - 1);
+            tmp_layer--;
+            continue;
+          }
+          else if ((res->size() % mul * array_len.at(tmp_layer - 1)) != 0)
+          {
+            break;
+          }
+        }
+        deque<int> tmp_arr_len;
+        for (; tmp_layer < array_len.size(); tmp_layer++)
+        {
+          tmp_arr_len.push_back(array_len.at(tmp_layer));
+        }
+        deque<BaseAST *> *inner_list = init_vals->at(i)->get_array_aggregate(tmp_arr_len);
+        for (int j = 0; j < inner_list->size(); j++)
+        {
+          res->push_back(inner_list->at(j));
+        }
+      }
+    }
+    while (res->size() < length)
+    {
+      BaseAST *zero = new ROOTAST();
+      zero->name = "#";
+      zero->val = 0;
+      res->push_back(zero);
+    }
+    return res;
+  }
 };
 
 // VarDef - ident
@@ -2161,7 +2217,7 @@ public:
     cout << ident;
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     name = "@" + ident;
     string b_type = "i32";
@@ -2175,8 +2231,8 @@ public:
       var_tmp.var_is_func_param = 0;
       top_symbol_map->insert(name, var_tmp);
 
-      out += "global " + name + "_" + to_string(count_block);
-      out += " = alloc i32, zeroinit\n";
+      output_IR += "global " + name + "_" + to_string(count_block);
+      output_IR += " = alloc i32, zeroinit\n";
     }
     else
     {
@@ -2185,12 +2241,10 @@ public:
       var_tmp.def_block_id = count_block;
       top_symbol_map->insert(name, var_tmp);
 
-      out += name + "_" + to_string(count_block);
-      out += " = alloc i32\n";
+      output_IR += name + "_" + to_string(count_block);
+      output_IR += " = alloc i32\n";
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // VarDef - ident "=" init_val
@@ -2206,7 +2260,7 @@ public:
     init_val->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     VarUnion var_tmp;
     string b_type = "i32";
@@ -2218,14 +2272,14 @@ public:
       var_tmp.type.type = b_type;
       var_tmp.def_block_id = count_block;
 
-      init_val->printIR(out);
+      init_val->printIR();
       assert(init_val->name == "#");
       var_tmp.var_is_func_param = 0;
 
       top_symbol_map->insert(name, var_tmp);
 
-      out += "global " + name + "_" + to_string(count_block);
-      out += " = alloc i32, " + to_string(init_val->val) + "\n";
+      output_IR += "global " + name + "_" + to_string(count_block);
+      output_IR += " = alloc i32, " + to_string(init_val->val) + "\n";
     }
     else
     {
@@ -2234,34 +2288,33 @@ public:
       var_tmp.def_block_id = count_block;
       top_symbol_map->insert(name, var_tmp);
 
-      out += name + "_" + to_string(count_block);
-      out += " = alloc i32\n";
+      output_IR += name + "_" + to_string(count_block);
+      output_IR += " = alloc i32\n";
 
-      init_val->printIR(out);
+      init_val->printIR();
 
       if (init_val->name == "#")
       {
-        out += "store ";
-        out += to_string(init_val->val).c_str();
-        out += ", ";
-        out += name + "_" + to_string(count_block);
-        out += "\n";
+        output_IR += "store ";
+        output_IR += to_string(init_val->val).c_str();
+        output_IR += ", ";
+        output_IR += name + "_" + to_string(count_block);
+        output_IR += "\n";
       }
       else
       {
-        out += "store ";
-        out += init_val->name;
-        out += ", ";
-        out += name + "_" + to_string(count_block);
-        out += "\n";
+        output_IR += "store ";
+        output_IR += init_val->name;
+        output_IR += ", ";
+        output_IR += name + "_" + to_string(count_block);
+        output_IR += "\n";
       }
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
-// VarDef - ident "[" const_exp "]"
+// TODO:
+// VarDef - ident "[" const_exp "]" { "[" const_exp "]" }
 class VarDefAST_3 : public BaseAST
 {
 public:
@@ -2273,12 +2326,12 @@ public:
     cout << ident;
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     name = "@" + ident;
     string b_type = "i32";
 
-    const_exp->printIR(out);
+    const_exp->printIR();
     assert(const_exp->name == "#");
 
     VarUnion var_tmp;
@@ -2291,8 +2344,8 @@ public:
       var_tmp.var_is_func_param = 0;
       top_symbol_map->insert(name, var_tmp);
 
-      out += "global " + name + "_" + to_string(count_block);
-      out += " = alloc [i32, " + to_string(const_exp->val) + "], zeroinit\n";
+      output_IR += "global " + name + "_" + to_string(count_block);
+      output_IR += " = alloc [i32, " + to_string(const_exp->val) + "], zeroinit\n";
     }
     else
     {
@@ -2302,117 +2355,103 @@ public:
       var_tmp.def_block_id = count_block;
       top_symbol_map->insert(name, var_tmp);
 
-      out += name + "_" + to_string(count_block);
-      out += " = alloc [i32, " + to_string(const_exp->val) + "]\n";
+      output_IR += name + "_" + to_string(count_block);
+      output_IR += " = alloc [i32, " + to_string(const_exp->val) + "]\n";
 
       for (int i = 0; i < const_exp->val; i++)
       {
         string ptr_name = "%ptr" + to_string(count_ptr);
-        out += ptr_name + " = getelemptr ";
-        out += name + "_" + to_string(count_block);
-        out += ", " + to_string(i) + "\n";
-        out += "store 0, " + ptr_name + "\n";
+        output_IR += ptr_name + " = getelemptr ";
+        output_IR += name + "_" + to_string(count_block);
+        output_IR += ", " + to_string(i) + "\n";
+        output_IR += "store 0, " + ptr_name + "\n";
         count_ptr++;
       }
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
-// VarDef - ident "[" const_exp "]" "=" init_val
+// TODO:
+// VarDef - ident "[" const_exp "]" { "[" const_exp "]" } "=" init_val
 class VarDefAST_4 : public BaseAST
 {
 public:
   string ident;
-  unique_ptr<BaseAST> const_exp;
-  unique_ptr<InitValAST_2> init_val;
+  deque<unique_ptr<BaseAST>> *const_exps;
+  unique_ptr<BaseAST> init_val;
 
   void Dump() const override
   {
     cout << ident;
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     name = "@" + ident;
     string b_type = "i32";
 
-    const_exp->printIR(out);
-    assert(const_exp->name == "#");
+    assert(const_exps != nullptr);
+    for (int i = 0; i < const_exps->size(); i++)
+    {
+      const_exps->at(i)->printIR();
+      assert(const_exps->at(i)->name == "#");
+    }
 
-    init_val->printIR(out);
+    init_val->printIR();
 
     VarUnion var_tmp;
     if (top_symbol_map->outer_map == nullptr)
     {
       var_tmp.kind = var_kind_NOT_INIT_GLOBAL_VAR;
       var_tmp.type.type = b_type;
-      var_tmp.type.array_len.push_back(const_exp->val);
+      for (int i = 0; i < const_exps->size(); i++)
+      {
+        var_tmp.type.array_len.push_back(const_exps->at(i)->val);
+      }
       var_tmp.def_block_id = count_block;
       var_tmp.var_is_func_param = 0;
       top_symbol_map->insert(name, var_tmp);
 
-      string aggregate = "{";
-      for (int i = 0; i < const_exp->val; i++)
-      {
-        if (i < init_val->exps->size())
-        {
-          aggregate += to_string(init_val->exps->at(i)->val);
-        }
-        else
-        {
-          aggregate += "0";
-        }
-        if (i != const_exp->val - 1)
-        {
-          aggregate += ", ";
-        }
-      }
-      aggregate += "}";
+      deque<BaseAST *> *aggregate_ptr = init_val->get_array_aggregate(var_tmp.type.array_len);
+      assert(aggregate_ptr != nullptr);
 
-      out += "global " + name + "_" + to_string(count_block);
-      out += " = alloc [i32, " + to_string(const_exp->val) + "], " + aggregate + "\n";
+      string array_type = get_array_type_in_IR(var_tmp.type.array_len, 0);
+      string aggregate = trans_aggregate(var_tmp.type.array_len, aggregate_ptr);
+
+      output_IR += "global " + name + "_" + to_string(count_block);
+      output_IR += " = alloc " + array_type + ", " + aggregate + "\n";
     }
     else
     {
       var_tmp.kind = var_kind_VAR;
       var_tmp.type.type = b_type;
-      var_tmp.type.array_len.push_back(const_exp->val);
+      for (int i = 0; i < const_exps->size(); i++)
+      {
+        var_tmp.type.array_len.push_back(const_exps->at(i)->val);
+      }
       var_tmp.def_block_id = count_block;
       top_symbol_map->insert(name, var_tmp);
 
-      out += name + "_" + to_string(count_block);
-      out += " = alloc [i32, " + to_string(const_exp->val) + "]\n";
+      output_IR += name + "_" + to_string(count_block);
+      output_IR += " = alloc " + get_array_type_in_IR(var_tmp.type.array_len, 0) + "\n";
 
-      for (int i = 0; i < const_exp->val; i++)
+      deque<BaseAST *> *aggregate_ptr = init_val->get_array_aggregate(var_tmp.type.array_len);
+      assert(aggregate_ptr != nullptr);
+
+      for (int i = 0; i < aggregate_ptr->size(); i++)
       {
-        if (i < init_val->exps->size())
-        {
-          string ptr_name = "%ptr" + to_string(count_ptr);
-          out += ptr_name + " = getelemptr ";
-          out += name + "_" + to_string(count_block);
-          out += ", " + to_string(i) + "\n";
-          if (init_val->exps->at(i)->name == "#")
-            out += "store " + to_string(init_val->exps->at(i)->val) + ", " + ptr_name + "\n";
-          else
-            out += "store " + init_val->exps->at(i)->name + ", " + ptr_name + "\n";
-          count_ptr++;
-        }
+        string ptr_name = "%ptr" + to_string(count_ptr);
+        output_IR += ptr_name + " = getelemptr ";
+        output_IR += name + "_" + to_string(count_block);
+        output_IR += ", " + to_string(i) + "\n";
+        if (aggregate_ptr->at(i)->name == "#")
+          output_IR += "store " + to_string(aggregate_ptr->at(i)->val) + ", " + ptr_name + "\n";
         else
-        {
-          string ptr_name = "%ptr" + to_string(count_ptr);
-          out += ptr_name + " = getelemptr ";
-          out += name + "_" + to_string(count_block);
-          out += ", " + to_string(i) + "\n";
-          out += "store 0, " + ptr_name + "\n";
-          count_ptr++;
-        }
+          output_IR += "store " + aggregate_ptr->at(i)->name + ", " + ptr_name + "\n";
+        count_ptr++;
       }
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // LVal - ident
@@ -2426,7 +2465,7 @@ public:
     cout << ident;
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
     string tmp_name = "@" + ident;
     VarUnion var_u = top_symbol_map->find(tmp_name);
@@ -2444,8 +2483,8 @@ public:
       if (var_u.var_is_func_param == 1)
       {
         name = "%" + ident;
-        out += name + " = alloc i32\n";
-        out += "store " + tmp_name + ", " + name + "\n";
+        output_IR += name + " = alloc i32\n";
+        output_IR += "store " + tmp_name + ", " + name + "\n";
         top_symbol_map->erase(tmp_name);
         var_u.var_is_func_param = 2;
         top_symbol_map->insert(tmp_name, var_u);
@@ -2463,41 +2502,45 @@ public:
       }
     }
   }
-
-  void list_the_param(string &out) override {}
 };
 
-// LVal - IDENT "[" Exp "]"
+// TODO:
+// LVal - ident "[" exp "]" { "[" exp "]" }
 class LValAST_2 : public BaseAST
 {
 public:
   string ident;
-  unique_ptr<BaseAST> exp;
+  deque<unique_ptr<BaseAST>> *exps;
 
   void Dump() const override
   {
     cout << ident;
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    exp->printIR(out);
+    for (int i = 0; i < exps->size(); i++)
+    {
+      exps->at(i)->printIR();
+    }
 
     string tmp_name = "@" + ident;
     VarUnion var_u = top_symbol_map->find(tmp_name);
     assert(var_u.kind != var_kind_ERROR);
 
-    name = "%ptr" + to_string(count_ptr);
-    count_ptr++;
+    for (int i = 0; i < exps->size(); i++)
+    {
+      name = "%ptr" + to_string(count_ptr);
+      count_ptr++;
 
-    out += name + " = getelemptr " + tmp_name + "_" + to_string(var_u.def_block_id);
-    if (exp->name == "#")
-      out += ", " + to_string(exp->val) + "\n";
-    else
-      out += ", " + exp->name + "\n";
+      output_IR += name + " = getelemptr " + tmp_name + "_" + to_string(var_u.def_block_id);
+      if (exps->at(i)->name == "#")
+        output_IR += ", " + to_string(exps->at(i)->val) + "\n";
+      else
+        output_IR += ", " + exps->at(i)->name + "\n";
+      tmp_name = name;
+    }
   }
-
-  void list_the_param(string &out) override {}
 };
 
 // ConstExp - Exp;
@@ -2511,12 +2554,10 @@ public:
     exp->Dump();
   }
 
-  void printIR(string &out) override
+  void printIR() override
   {
-    exp->printIR(out);
+    exp->printIR();
     assert(exp->name == "#");
     val = exp->val;
   }
-
-  void list_the_param(string &out) override {}
 };

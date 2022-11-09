@@ -3,7 +3,7 @@
 #include <iostream>
 #include <string>
 #include <cstring>
-#include <vector>
+#include <deque>
 #include <deque>
 #include <assert.h>
 #include <map>
@@ -23,7 +23,7 @@ enum VarKind
 struct var_type
 {
     string type;
-    vector<int> array_len;
+    deque<int> array_len;
 };
 
 struct VarUnion
@@ -34,7 +34,7 @@ struct VarUnion
     // if const
     // if type=[i32]: val={val}
     // if type=[i32,n]: val={val_1,...,val_n}
-    vector<int> val;
+    deque<int> val;
     // if var, if it is a func's param
     int var_is_func_param = 0;
 };

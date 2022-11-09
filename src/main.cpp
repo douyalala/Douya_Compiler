@@ -18,6 +18,7 @@ FILE *out_file;
 
 map<string, VarUnion> var_map;
 Multi_Symbol_Map *top_symbol_map = new Multi_Symbol_Map;
+string output_IR;
 string tmp_b_type = "";
 deque<int> now_in_while;
 
@@ -76,9 +77,8 @@ int main(int argc, const char *argv[])
   // ast->Dump();
 
   // AST to IR
-  string IRstring = "";
-  ast->printIR(IRstring);
-  const char *IRstr = IRstring.c_str();
+  ast->printIR();
+  const char *IRstr = output_IR.c_str();
 
   // koopa mode
   if (mode[1] == 'k')

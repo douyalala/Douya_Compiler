@@ -1,4 +1,4 @@
-# Douya's Compiler For PKU compiler course
+# Douya's Compiler For PKU Compiler Principles Course
 
 它曾经是：**基于 Makefile 的 SysY 编译器项目模板(https://github.com/pku-minic/sysy-make-template)**
 
@@ -20,7 +20,7 @@ cd compiler/
    make and run build/compiler -koopa/riscv hello.c -o hello.koopa
 
 ```sh
-python3 make_run.py -r/k
+python3 make_run.py -k/r
 ```
 
 3. 本地测试所有目前做完的部分

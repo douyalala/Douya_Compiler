@@ -2,7 +2,7 @@
   #include <iostream>
   #include <memory>
   #include <string>
-  #include <vector>
+  #include <deque>
   #include <AST.h>
 }
 
@@ -11,7 +11,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include <vector>
+#include <deque>
 #include <AST.h>
 
 // lexer and  yyerror
@@ -30,9 +30,7 @@ using namespace std;
   std::string *str_val;
   int int_val;
   BaseAST *ast_val;
-  ConstInitValAST_2 *ConstInitVal_ast_val;
-  InitValAST_2 *InitValAST_2_ast_val;
-  vector<unique_ptr<BaseAST>> *ast_list_val;
+  deque<unique_ptr<BaseAST>> *ast_list_val;
 }
 
 
@@ -52,9 +50,7 @@ ConstDecl ConstDef ConstInitVal ConstExp
 VarDecl VarDef InitVal
 %type <int_val> Number
 %type <str_val> UnaryOp
-%type <ast_list_val> BlockItem_list ConstDef_list VarDef_list FuncFParams_list Exp_list ConstExp_List
-%type <ConstInitVal_ast_val> ConstInitVal_array
-%type <InitValAST_2_ast_val> InitVal_array
+%type <ast_list_val> BlockItem_list ConstDef_list VarDef_list FuncFParams_list Exp_list Array_Dim_List Array_Exp_List InitVal_list ConstInitVal_List
 
 %%
 
@@ -137,7 +133,7 @@ FuncFParams_list
     $$ = ($3);
   }
   | {
-    auto func_f_params = new vector<unique_ptr<BaseAST>>();
+    auto func_f_params = new deque<unique_ptr<BaseAST>>();
     $$ = func_f_params;
   }
 
@@ -162,7 +158,7 @@ BlockItem_list
     $$ = ($1);
   }
   | {
-    auto block_items = new vector<unique_ptr<BaseAST>>();
+    auto block_items = new deque<unique_ptr<BaseAST>>();
     $$ = block_items;
   }
 
@@ -334,7 +330,7 @@ Exp_list
     $$ = ($3);
   }
   | {
-    auto exps = new vector<unique_ptr<BaseAST>>();
+    auto exps = new deque<unique_ptr<BaseAST>>();
     $$ = exps;
   }
 
@@ -501,11 +497,22 @@ LVal
     ast->ident=*unique_ptr<string>($1);
     $$ = ast;
   }
-  | IDENT '[' Exp ']' {
+  | IDENT '[' Exp ']' Array_Exp_List {
     auto ast = new LValAST_2();
     ast->ident=*unique_ptr<string>($1);
-    ast->exp=unique_ptr<BaseAST>($3);
+    ($5)->insert(($5)->begin(),unique_ptr<BaseAST>($3));
+    ast->exps=($5);
     $$ = ast;
+  }
+
+Array_Exp_List
+  : '[' Exp ']' Array_Exp_List {
+    ($4)->insert(($4)->begin(),unique_ptr<BaseAST>($2));
+    $$ = ($4);
+  }
+  | {
+    auto array_exp_list = new deque<unique_ptr<BaseAST>>();
+    $$ = array_exp_list;
   }
 
 ConstDecl
@@ -522,7 +529,7 @@ ConstDef_list
     $$ = ($3);
   }
   | {
-    auto const_defs = new vector<unique_ptr<BaseAST>>();
+    auto const_defs = new deque<unique_ptr<BaseAST>>();
     $$ = const_defs;
   }
 
@@ -533,12 +540,24 @@ ConstDef
     ast->const_init_val=unique_ptr<BaseAST>($3);
     $$ = ast;
   }
-  | IDENT '[' ConstExp ']' '=' ConstInitVal_array {
+  | IDENT '[' ConstExp ']' Array_Dim_List '=' ConstInitVal {
+    // assert(false);
     auto ast = new ConstDefAST_2();
     ast->ident=*unique_ptr<string>($1);
-    ast->const_exp=unique_ptr<BaseAST>($3);
-    ast->const_init_val=unique_ptr<ConstInitValAST_2>($6);
+    ($5)->insert(($5)->begin(),unique_ptr<BaseAST>($3));
+    ast->const_exps=($5);
+    ast->const_init_val=unique_ptr<BaseAST>($7);
     $$ = ast;
+  }
+
+Array_Dim_List
+  : '[' ConstExp ']' Array_Dim_List {
+    ($4)->insert(($4)->begin(),unique_ptr<BaseAST>($2));
+    $$ = ($4);
+  }
+  | {
+    auto array_dim_list = new deque<unique_ptr<BaseAST>>();
+    $$ = array_dim_list;
   }
 
 ConstInitVal
@@ -547,27 +566,25 @@ ConstInitVal
     ast->const_exp=unique_ptr<BaseAST>($1);
     $$ = ast;
   }
-
-ConstInitVal_array
-  : '{' '}' {
+  | '{' '}' {
     auto ast = new ConstInitValAST_2();
-    ast->const_exps=new vector<unique_ptr<BaseAST>>();
+    ast->const_init_vals=new deque<unique_ptr<BaseAST>>();
     $$ = ast;
   }
-  | '{' ConstExp ConstExp_List  '}' {
+  | '{' ConstInitVal ConstInitVal_List  '}' {
     auto ast = new ConstInitValAST_2();
     ($3)->insert(($3)->begin(),unique_ptr<BaseAST>($2));
-    ast->const_exps=($3);
+    ast->const_init_vals=($3);
     $$ = ast;
   }
 
-ConstExp_List
-  : ',' ConstExp ConstExp_List {
+ConstInitVal_List
+  : ',' ConstInitVal ConstInitVal_List {
     ($3)->insert(($3)->begin(),unique_ptr<BaseAST>($2));
     $$ = ($3);
   }
   | {
-    auto const_exps=new vector<unique_ptr<BaseAST>>();
+    auto const_exps=new deque<unique_ptr<BaseAST>>();
     $$ = const_exps;
   }
 
@@ -592,7 +609,7 @@ VarDef_list
     $$ = ($3);
   }
   | {
-    auto var_defs = new vector<unique_ptr<BaseAST>>();
+    auto var_defs = new deque<unique_ptr<BaseAST>>();
     $$ = var_defs;
   }
 
@@ -608,17 +625,19 @@ VarDef
     ast->init_val = unique_ptr<BaseAST>($3);
     $$ = ast;
   }
-  | IDENT '[' ConstExp ']' {
+  | IDENT '[' ConstExp ']' Array_Dim_List {
     auto ast = new VarDefAST_3();
     ast->ident = *unique_ptr<string>($1);
+    ($5)->insert(($5)->begin(),unique_ptr<BaseAST>($3));
     ast->const_exp=unique_ptr<BaseAST>($3);
     $$ = ast;
   }
-  | IDENT '[' ConstExp ']' '=' InitVal_array {
+  | IDENT '[' ConstExp ']' Array_Dim_List '=' InitVal {
     auto ast = new VarDefAST_4();
     ast->ident = *unique_ptr<string>($1);
-    ast->const_exp=unique_ptr<BaseAST>($3);
-    ast->init_val = unique_ptr<InitValAST_2>($6);
+    ($5)->insert(($5)->begin(),unique_ptr<BaseAST>($3));
+    ast->const_exps = ($5);
+    ast->init_val = unique_ptr<BaseAST>($7);
     $$ = ast;
   }
 
@@ -628,18 +647,26 @@ InitVal
     ast->exp = unique_ptr<BaseAST>($1);
     $$ = ast;
   }
-
-InitVal_array
-  : '{' '}' {
+  | '{' '}' {
     auto ast = new InitValAST_2();
-    ast->exps = new vector<unique_ptr<BaseAST>>();
+    ast->init_vals = new deque<unique_ptr<BaseAST>>();
     $$ = ast;
   }
-  | '{' Exp Exp_list '}' {
+  | '{' InitVal InitVal_list '}' {
     auto ast = new InitValAST_2();
     ($3)->insert(($3)->begin(),unique_ptr<BaseAST>($2));
-    ast->exps = ($3);
+    ast->init_vals = ($3);
     $$ = ast;
+  }
+
+InitVal_list
+  : ',' InitVal InitVal_list {
+    ($3)->insert(($3)->begin(),unique_ptr<BaseAST>($2));
+    $$ = ($3);
+  }
+  | {
+    auto init_lists=new deque<unique_ptr<BaseAST>>();
+    $$ = init_lists;
   }
 
 %%
