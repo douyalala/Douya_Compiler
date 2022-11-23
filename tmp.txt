@@ -7,29 +7,22 @@ decl @putarray(i32, *i32)
 decl @starttime()
 decl @stoptime()
 
+global @x_0 = alloc [i32, 2], {10,20}
+
 fun @main(): i32 {
 %entry:
-@x_2 = alloc i32
-@y_2 = alloc i32
-store 21, @y_2
-%0 = load @y_2
-%1 = add %0, 1
-store %1, @x_2
-@z_2 = alloc i32
-%2 = load @x_2
-%3 = sub 147, %2
-store %3, @z_2
-@w_2 = alloc i32
-%4 = load @y_2
-%5 = sub 147, %4
-store %5, @w_2
-%6 = load @w_2
-%7 = mul %6, 1
-%8 = mul %7, 1
-%9 = mul %8, 1
-store %9, @w_2
-%10 = load @z_2
-%11 = load @w_2
-%12 = add %10, %11
-ret %12
+@arr_2 = alloc [i32, 5]
+%ptr0 = getelemptr @arr_2, 0
+store 1, %ptr0
+%ptr1 = getelemptr @arr_2, 1
+store 2, %ptr1
+%ptr2 = getelemptr @arr_2, 2
+store 3, %ptr2
+%ptr3 = getelemptr @arr_2, 3
+store 0, %ptr3
+%ptr4 = getelemptr @arr_2, 4
+store 0, %ptr4
+%ptr5 = getelemptr @arr_2, 2
+%0 = load %ptr5
+ret %0
 }
