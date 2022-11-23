@@ -1,194 +1,60 @@
-decl @getint(): i32
-decl @getch(): i32
-decl @getarray(*i32): i32
-decl @putint(i32)
-decl @putch(i32)
-decl @putarray(i32, *i32)
-decl @starttime()
-decl @stoptime()
 
-global @n_0 = alloc i32, zeroinit
-
-fun @select_sort(@A: *i32, @n: i32): i32 {
-%entry:
-@i_2 = alloc i32
-@j_2 = alloc i32
-@min_2 = alloc i32
-store 0, @i_2
-%0 = load @i_2
-%n1 = alloc i32
-store @n, %n1
-%2 = load %n1
-%3 = sub %2, 1
-%4 = lt %0, %3
-br %4, %while_body_0, %while_end_0
-
-%while_entry_0:
-%5 = load @i_2
-%6 = load %n
-%7 = sub %6, 1
-%8 = lt %5, %7
-br %8, %while_body_0, %while_end_0
-
-%while_body_0:
-%9 = load @i_2
-store %9, @min_2
-%10 = load @i_2
-%11 = add %10, 1
-store %11, @j_2
-%12 = load @j_2
-%13 = load %n
-%14 = lt %12, %13
-br %14, %while_body_1, %while_end_1
-
-%while_entry_1:
-%15 = load @j_2
-%16 = load %n
-%17 = lt %15, %16
-br %17, %while_body_1, %while_end_1
-
-%while_body_1:
-%18 = load @min_2
-%A19 = alloc *i32
-store @A, %A19
-%20 = load %A19
-%ptr0 = getptr %20, %18
-%21 = load %ptr0
-%22 = load @j_2
-%23 = load %A
-%ptr1 = getptr %23, %22
-%24 = load %ptr1
-%25 = gt %21, %24
-br %25, %if_2, %end_2
-
-%if_2:
-%26 = load @j_2
-store %26, @min_2
-jump %end_2
-
-%end_2:
-%27 = load @j_2
-%28 = add %27, 1
-store %28, @j_2
-jump %while_entry_1
-
-%while_end_1:
-%29 = load @min_2
-%30 = load @i_2
-%31 = ne %29, %30
-br %31, %if_3, %end_3
-
-%if_3:
-@tmp_6 = alloc i32
-%32 = load @min_2
-%A33 = alloc *i32
-store @A, %A33
-%34 = load %A33
-%ptr2 = getptr %34, %32
-%35 = load %ptr2
-store %35, @tmp_6
-%36 = load @min_2
-%37 = load %A
-%ptr3 = getptr %37, %36
-%38 = load @i_2
-%39 = load %A
-%ptr4 = getptr %39, %38
-%40 = load %ptr4
-store %40, %ptr3
-%41 = load @i_2
-%42 = load %A
-%ptr5 = getptr %42, %41
-%43 = load @tmp_6
-store %43, %ptr5
-jump %end_3
-
-%end_3:
-%44 = load @i_2
-%45 = add %44, 1
-store %45, @i_2
-jump %while_entry_0
-
-%while_end_0:
-ret 0
-}
-
-fun @main(): i32 {
-%entry:
-store 10, @n_0
-@a_8 = alloc [i32, 10]
-%ptr6 = getelemptr @a_8, 0
-store 0, %ptr6
-%ptr7 = getelemptr @a_8, 1
-store 0, %ptr7
-%ptr8 = getelemptr @a_8, 2
-store 0, %ptr8
-%ptr9 = getelemptr @a_8, 3
-store 0, %ptr9
-%ptr10 = getelemptr @a_8, 4
-store 0, %ptr10
-%ptr11 = getelemptr @a_8, 5
-store 0, %ptr11
-%ptr12 = getelemptr @a_8, 6
-store 0, %ptr12
-%ptr13 = getelemptr @a_8, 7
-store 0, %ptr13
-%ptr14 = getelemptr @a_8, 8
-store 0, %ptr14
-%ptr15 = getelemptr @a_8, 9
-store 0, %ptr15
-%ptr16 = getelemptr @a_8, 0
-store 4, %ptr16
-%ptr17 = getelemptr @a_8, 1
-store 3, %ptr17
-%ptr18 = getelemptr @a_8, 2
-store 9, %ptr18
-%ptr19 = getelemptr @a_8, 3
-store 2, %ptr19
-%ptr20 = getelemptr @a_8, 4
-store 0, %ptr20
-%ptr21 = getelemptr @a_8, 5
-store 1, %ptr21
-%ptr22 = getelemptr @a_8, 6
-store 6, %ptr22
-%ptr23 = getelemptr @a_8, 7
-store 5, %ptr23
-%ptr24 = getelemptr @a_8, 8
-store 7, %ptr24
-%ptr25 = getelemptr @a_8, 9
-store 8, %ptr25
-@i_8 = alloc i32
-store 0, @i_8
-%ptr26 = getelemptr @a_8, 0
-%46 = load @n_0
-%47 = call @select_sort(%ptr26, %46)
-store %47, @i_8
-%48 = load @i_8
-%49 = load @n_0
-%50 = lt %48, %49
-br %50, %while_body_4, %while_end_4
-
-%while_entry_4:
-%51 = load @i_8
-%52 = load @n_0
-%53 = lt %51, %52
-br %53, %while_body_4, %while_end_4
-
-%while_body_4:
-@tmp_9 = alloc i32
-%54 = load @i_8
-%ptr27 = getelemptr @a_8, %54
-%55 = load %ptr27
-store %55, @tmp_9
-%56 = load @tmp_9
-call @putint(%56)
-store 10, @tmp_9
-%57 = load @tmp_9
-call @putch(%57)
-%58 = load @i_8
-%59 = add %58, 1
-store %59, @i_8
-jump %while_entry_4
-
-%while_end_4:
-ret 0
-}
+.text
+.globl main
+main:
+addi sp, sp, -96
+li t0, 21
+sw t0, 64(sp)
+left_var: 1  64
+lw t0, 64(sp)
+li t1, 1
+right_var: 0 t1 -1312203376
+add t0, t0, t1
+sw t0, 60(sp)
+lw t0, 60(sp)
+sw t0, 80(sp)
+li t0, 147
+left_var: 0 t0 -1312203376
+right_var: 1  80
+lw t1, 80(sp)
+sub t0, t0, t1
+sw t0, 40(sp)
+lw t0, 40(sp)
+sw t0, 44(sp)
+li t0, 147
+left_var: 0 t0 -1312203376
+right_var: 1  64
+lw t1, 64(sp)
+sub t0, t0, t1
+sw t0, 20(sp)
+lw t0, 20(sp)
+sw t0, 24(sp)
+left_var: 1  24
+lw t0, 24(sp)
+li t1, 1
+right_var: 0 t1 -1312203376
+mul t0, t0, t1
+sw t0, 16(sp)
+left_var: 1  16
+lw t0, 16(sp)
+li t1, 1
+right_var: 0 t1 -1312203376
+mul t0, t0, t1
+sw t0, 12(sp)
+left_var: 1  12
+lw t0, 12(sp)
+li t1, 1
+right_var: 0 t1 -1312203376
+mul t0, t0, t1
+sw t0, 8(sp)
+lw t0, 8(sp)
+sw t0, 24(sp)
+left_var: 1  44
+lw t0, 44(sp)
+right_var: 1  24
+lw t1, 24(sp)
+add t0, t0, t1
+sw t0, 4(sp)
+lw a0, 4(sp)
+addi sp, sp, 96
+ret
