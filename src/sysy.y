@@ -139,9 +139,16 @@ FuncFParams_list
 
 FuncFParam
   : INT IDENT {
-    auto ast = new FuncFParamAST();
+    auto ast = new FuncFParamAST_1();
     ast->b_type = "i32"; 
     ast->ident = *unique_ptr<string>($2);
+    $$ = ast;
+  }
+  | INT IDENT '[' ']' Array_Dim_List {
+    auto ast = new FuncFParamAST_2();
+    ast->b_type = "i32"; 
+    ast->ident = *unique_ptr<string>($2);
+    ast->const_exps = ($5);
     $$ = ast;
   }
 
@@ -541,7 +548,6 @@ ConstDef
     $$ = ast;
   }
   | IDENT '[' ConstExp ']' Array_Dim_List '=' ConstInitVal {
-    // assert(false);
     auto ast = new ConstDefAST_2();
     ast->ident=*unique_ptr<string>($1);
     ($5)->insert(($5)->begin(),unique_ptr<BaseAST>($3));
@@ -629,7 +635,7 @@ VarDef
     auto ast = new VarDefAST_3();
     ast->ident = *unique_ptr<string>($1);
     ($5)->insert(($5)->begin(),unique_ptr<BaseAST>($3));
-    ast->const_exp=unique_ptr<BaseAST>($3);
+    ast->const_exps=($5);
     $$ = ast;
   }
   | IDENT '[' ConstExp ']' Array_Dim_List '=' InitVal {

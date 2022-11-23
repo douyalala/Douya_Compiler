@@ -63,57 +63,86 @@ public:
   }
 
   // complete array init val -> string aggregate
-  string trans_aggregate(deque<int> array_len, deque<BaseAST *> *array_init_val)
+  string trans_aggregate(deque<int> array_len, deque<BaseAST *> *array_init_val, int &ind)
   {
-    int ind = 0;
-    deque<int> st;
     string res;
-    for (int i = 0; i < array_len.size(); i++)
+    if (array_len.size() == 1)
     {
-      st.push_back(0);
+      res += "{";
+      for (int i = 0; i < array_len.back(); i++)
+      {
+        if (i != 0)
+        {
+          res += ",";
+        }
+        res += to_string(array_init_val->at(ind)->val);
+        ind++;
+      }
+      res += "}";
     }
-    while (st.size() != 0)
+    else
     {
-      int layer = st.size();
-      int top = st.back();
-
-      // if in the deepest layer, add "{...}" to res
-      if (layer == array_len.size())
+      deque<int> tmp_array_len;
+      for (int i = 1; i < array_len.size(); i++)
       {
-        res += "{";
-        for (int i = 0; i < array_len.back(); i++, ind++)
-        {
-          if (i != 0)
-            res += ", ";
-          res += to_string(array_init_val->at(ind)->val);
-        }
-        res += "}";
-        st.pop_back();
-        if (st.size() != 0)
-        {
-          int pre_layer = st.back();
-          st.pop_back();
-          pre_layer++;
-          st.push_back(pre_layer);
-        }
-        continue;
+        tmp_array_len.push_back(array_len.at(i));
       }
 
-      // if this layer is complete, pop
-      if (top == array_len.at(layer))
+      res += "{";
+      for (int i = 0; i < array_len.at(0); i++)
       {
-        res += "}";
-        st.pop_back();
-        continue;
+        if (i != 0)
+        {
+          res += ",";
+        }
+        res += trans_aggregate(tmp_array_len, array_init_val, ind);
       }
-
-      if (top == 0)
-        res += "{";
-
-      st.push_back(0);
+      res += "}";
     }
     return res;
   }
+
+  void store_init_array(deque<int> array_len, int &ind, deque<BaseAST *> *array_init_val, string base_name)
+  {
+    if (array_len.size() == 1)
+    {
+      // deepest
+      for (int i = 0; i < array_len.at(0); i++)
+      {
+        string ptr_name = "%ptr" + to_string(count_ptr++);
+        output_IR += ptr_name + " = getelemptr " + base_name;
+        output_IR += ", " + to_string(i) + "\n";
+        if (array_init_val == nullptr)
+        {
+          // zero init
+          output_IR += "store " + to_string(0) + ", " + ptr_name + "\n";
+        }
+        else
+        {
+          output_IR += "store " + to_string(array_init_val->at(ind)->val) + ", " + ptr_name + "\n";
+        }
+        ind++;
+      }
+    }
+    else
+    {
+      deque<int> tmp_arr_len;
+      for (int i = 1; i < array_len.size(); i++)
+      {
+        tmp_arr_len.push_back(array_len.at(i));
+      }
+
+      for (int i = 0; i < array_len.at(0); i++)
+      {
+        string ptr_name = "%ptr" + to_string(count_ptr++);
+        output_IR += ptr_name + " = getelemptr " + base_name;
+        output_IR += ", " + to_string(i) + "\n";
+        store_init_array(tmp_arr_len, ind, array_init_val, ptr_name);
+      }
+    }
+  }
+
+  virtual void init_func_param() {}
 };
 
 // ROOT - CompUnit
@@ -221,6 +250,11 @@ public:
 
     output_IR += "%entry:\n";
 
+    if (func_f_params != nullptr)
+    {
+      func_f_params->init_func_param();
+    }
+
     block->printIR();
 
     if (block->name != "ret")
@@ -262,10 +296,18 @@ public:
         output_IR += ", ";
     }
   }
+
+  void init_func_param() override
+  {
+    for (int i = 0; i < func_f_params->size(); i++)
+    {
+      func_f_params->at(i)->init_func_param();
+    }
+  }
 };
 
-// FuncFParam  ::= BType IDENT;
-class FuncFParamAST : public BaseAST
+// FuncFParam - BType IDENT;
+class FuncFParamAST_1 : public BaseAST
 {
 public:
   string b_type; // int - "i32"
@@ -287,6 +329,83 @@ public:
     top_symbol_map->insert(param_name, param_tmp);
 
     output_IR += param_name + ": " + b_type;
+  }
+
+  void init_func_param() override
+  {
+    string tmp_name = "@" + ident;
+    VarUnion var_u = top_symbol_map->find(tmp_name);
+    assert(var_u.kind != var_kind_ERROR);
+
+    name = "%" + ident;
+    output_IR += name + " = alloc " + var_u.type.type + "\n";
+    output_IR += "store " + tmp_name + ", " + name + "\n";
+    top_symbol_map->erase(tmp_name);
+    var_u.var_is_func_param = 2;
+    top_symbol_map->insert(tmp_name, var_u);
+  }
+};
+
+// FuncFParam - BType IDENT [ "[" "]" { "[" ConstExp "] "}];
+class FuncFParamAST_2 : public BaseAST
+{
+public:
+  string b_type; // int - "i32"
+  string ident;
+  deque<unique_ptr<BaseAST>> *const_exps;
+
+  void Dump() const override
+  {
+    cout << b_type << " " << ident;
+  }
+
+  void printIR() override
+  {
+
+    for (int i = 0; i < const_exps->size(); i++)
+    {
+      const_exps->at(i)->printIR();
+      assert(const_exps->at(i)->name == "#");
+    }
+
+    string param_name = "@" + ident;
+    VarUnion param_tmp;
+    param_tmp.kind = var_kind_VAR;
+
+    if (const_exps->size() == 0)
+    {
+      param_tmp.type.type = "*" + b_type;
+    }
+    else
+    {
+      for (int i = 0; i < const_exps->size(); i++)
+      {
+        param_tmp.type.array_len.push_back(const_exps->at(i)->val);
+      }
+      param_tmp.type.type = "*" + get_array_type_in_IR(param_tmp.type.array_len, 0);
+    }
+
+    param_tmp.type.array_len.push_front(-1);
+
+    param_tmp.def_block_id = count_block;
+    param_tmp.var_is_func_param = 1;
+    top_symbol_map->insert(param_name, param_tmp);
+
+    output_IR += param_name + ": " + param_tmp.type.type;
+  }
+
+  void init_func_param() override
+  {
+    string tmp_name = "@" + ident;
+    VarUnion var_u = top_symbol_map->find(tmp_name);
+    assert(var_u.kind != var_kind_ERROR);
+
+    name = "%" + ident;
+    output_IR += name + " = alloc " + var_u.type.type + "\n";
+    output_IR += "store " + tmp_name + ", " + name + "\n";
+    top_symbol_map->erase(tmp_name);
+    var_u.var_is_func_param = 2;
+    top_symbol_map->insert(tmp_name, var_u);
   }
 };
 
@@ -1135,7 +1254,7 @@ public:
   }
 };
 
-// FuncRParams ::= Exp {"," Expvoid list_the_param(string &out) override{}}
+// FuncRParams ::= Exp {"," Exp}
 class FuncRParamsAST : public BaseAST
 {
 public:
@@ -1873,7 +1992,6 @@ public:
   }
 };
 
-// TODO:
 // ConstInitVal - "{" [const_init_val {"," const_init_val}] "}"
 class ConstInitValAST_2 : public BaseAST
 {
@@ -1920,16 +2038,22 @@ public:
         int tmp_layer = array_len.size() - 1;
         int mul = array_len.at(tmp_layer);
         assert(res->size() % array_len.at(tmp_layer) == 0);
+        // find the largest layer
         while (1)
         {
           assert(tmp_layer != 0);
-          if ((res->size() % mul * array_len.at(tmp_layer - 1)) == 0)
+          if ((res->size() % (mul * array_len.at(tmp_layer - 1))) == 0)
           {
+            if ((tmp_layer - 1) == 0)
+            {
+              break;
+            }
+
             mul *= array_len.at(tmp_layer - 1);
             tmp_layer--;
             continue;
           }
-          else if ((res->size() % mul * array_len.at(tmp_layer - 1)) != 0)
+          else
           {
             break;
           }
@@ -1985,7 +2109,6 @@ public:
   }
 };
 
-// TODO:
 // ConstDef - ident "[" const_exp "]" { "[" const_exp "]" } "=" const_init_val
 // this is (multi)array
 class ConstDefAST_2 : public BaseAST
@@ -2023,15 +2146,17 @@ public:
       {
         const_tmp.type.array_len.push_back(const_exps->at(i)->val);
       }
-      const_tmp.val.push_back(const_init_val->val);
+      // const arrays don't have a val
+      // const_tmp.val.push_back(const_init_val->val);
       const_tmp.def_block_id = count_block;
       top_symbol_map->insert(name, const_tmp);
 
       deque<BaseAST *> *aggregate_ptr = const_init_val->get_array_aggregate(const_tmp.type.array_len);
       assert(aggregate_ptr != nullptr);
 
+      int tmp_ind = 0;
       string array_type = get_array_type_in_IR(const_tmp.type.array_len, 0);
-      string aggregate = trans_aggregate(const_tmp.type.array_len, aggregate_ptr);
+      string aggregate = trans_aggregate(const_tmp.type.array_len, aggregate_ptr, tmp_ind);
 
       output_IR += "global " + name + "_" + to_string(count_block);
       output_IR += " = alloc " + array_type + ", " + aggregate + "\n";
@@ -2054,16 +2179,8 @@ public:
       deque<BaseAST *> *aggregate_ptr = const_init_val->get_array_aggregate(const_tmp.type.array_len);
       assert(aggregate_ptr != nullptr);
 
-      for (int i = 0; i < aggregate_ptr->size(); i++)
-      {
-
-        string ptr_name = "%ptr" + to_string(count_ptr);
-        output_IR += ptr_name + " = getelemptr ";
-        output_IR += name + "_" + to_string(count_block);
-        output_IR += ", " + to_string(i) + "\n";
-        output_IR += "store " + to_string(aggregate_ptr->at(i)->val) + ", " + ptr_name + "\n";
-        count_ptr++;
-      }
+      int tmp_ind = 0;
+      store_init_array(const_tmp.type.array_len, tmp_ind, aggregate_ptr, (name + "_" + to_string(count_block)));
     }
   }
 };
@@ -2122,7 +2239,6 @@ public:
   }
 };
 
-// TODO:
 // InitVal - "{" [init_val {"," init_val}] "}"
 class InitValAST_2 : public BaseAST
 {
@@ -2169,20 +2285,27 @@ public:
         int tmp_layer = array_len.size() - 1;
         int mul = array_len.at(tmp_layer);
         assert(res->size() % array_len.at(tmp_layer) == 0);
+
         while (1)
         {
           assert(tmp_layer != 0);
-          if ((res->size() % mul * array_len.at(tmp_layer - 1)) == 0)
+          if ((res->size() % (mul * array_len.at(tmp_layer - 1))) == 0)
           {
+            if ((tmp_layer - 1) == 0)
+            {
+              break;
+            }
+
             mul *= array_len.at(tmp_layer - 1);
             tmp_layer--;
             continue;
           }
-          else if ((res->size() % mul * array_len.at(tmp_layer - 1)) != 0)
+          else
           {
             break;
           }
         }
+
         deque<int> tmp_arr_len;
         for (; tmp_layer < array_len.size(); tmp_layer++)
         {
@@ -2313,13 +2436,12 @@ public:
   }
 };
 
-// TODO:
 // VarDef - ident "[" const_exp "]" { "[" const_exp "]" }
 class VarDefAST_3 : public BaseAST
 {
 public:
   string ident;
-  unique_ptr<BaseAST> const_exp;
+  deque<unique_ptr<BaseAST>> *const_exps;
 
   void Dump() const override
   {
@@ -2331,47 +2453,54 @@ public:
     name = "@" + ident;
     string b_type = "i32";
 
-    const_exp->printIR();
-    assert(const_exp->name == "#");
+    for (int i = 0; i < const_exps->size(); i++)
+    {
+      const_exps->at(i)->printIR();
+      assert(const_exps->at(i)->name == "#");
+    }
 
     VarUnion var_tmp;
     if (top_symbol_map->outer_map == nullptr)
     {
       var_tmp.kind = var_kind_NOT_INIT_GLOBAL_VAR;
       var_tmp.type.type = b_type;
-      var_tmp.type.array_len.push_back(const_exp->val);
+      for (int i = 0; i < const_exps->size(); i++)
+      {
+        var_tmp.type.array_len.push_back(const_exps->at(i)->val);
+      }
       var_tmp.def_block_id = count_block;
       var_tmp.var_is_func_param = 0;
       top_symbol_map->insert(name, var_tmp);
 
+      string array_type = get_array_type_in_IR(var_tmp.type.array_len, 0);
+
       output_IR += "global " + name + "_" + to_string(count_block);
-      output_IR += " = alloc [i32, " + to_string(const_exp->val) + "], zeroinit\n";
+      output_IR += " = alloc " + array_type + ", zeroinit\n";
     }
     else
     {
       var_tmp.kind = var_kind_VAR;
       var_tmp.type.type = b_type;
-      var_tmp.type.array_len.push_back(const_exp->val);
+      for (int i = 0; i < const_exps->size(); i++)
+      {
+        var_tmp.type.array_len.push_back(const_exps->at(i)->val);
+      }
       var_tmp.def_block_id = count_block;
       top_symbol_map->insert(name, var_tmp);
 
-      output_IR += name + "_" + to_string(count_block);
-      output_IR += " = alloc [i32, " + to_string(const_exp->val) + "]\n";
+      string array_type = get_array_type_in_IR(var_tmp.type.array_len, 0);
 
-      for (int i = 0; i < const_exp->val; i++)
-      {
-        string ptr_name = "%ptr" + to_string(count_ptr);
-        output_IR += ptr_name + " = getelemptr ";
-        output_IR += name + "_" + to_string(count_block);
-        output_IR += ", " + to_string(i) + "\n";
-        output_IR += "store 0, " + ptr_name + "\n";
-        count_ptr++;
-      }
+      string full_arr_name = name + "_" + to_string(count_block);
+
+      output_IR += name + "_" + to_string(count_block);
+      output_IR += " = alloc " + array_type + "\n";
+
+      int tmp_ind = 0;
+      store_init_array(var_tmp.type.array_len, tmp_ind, nullptr, (name + "_" + to_string(count_block)));
     }
   }
 };
 
-// TODO:
 // VarDef - ident "[" const_exp "]" { "[" const_exp "]" } "=" init_val
 class VarDefAST_4 : public BaseAST
 {
@@ -2415,8 +2544,9 @@ public:
       deque<BaseAST *> *aggregate_ptr = init_val->get_array_aggregate(var_tmp.type.array_len);
       assert(aggregate_ptr != nullptr);
 
+      int tmp_ind = 0;
       string array_type = get_array_type_in_IR(var_tmp.type.array_len, 0);
-      string aggregate = trans_aggregate(var_tmp.type.array_len, aggregate_ptr);
+      string aggregate = trans_aggregate(var_tmp.type.array_len, aggregate_ptr, tmp_ind);
 
       output_IR += "global " + name + "_" + to_string(count_block);
       output_IR += " = alloc " + array_type + ", " + aggregate + "\n";
@@ -2438,18 +2568,8 @@ public:
       deque<BaseAST *> *aggregate_ptr = init_val->get_array_aggregate(var_tmp.type.array_len);
       assert(aggregate_ptr != nullptr);
 
-      for (int i = 0; i < aggregate_ptr->size(); i++)
-      {
-        string ptr_name = "%ptr" + to_string(count_ptr);
-        output_IR += ptr_name + " = getelemptr ";
-        output_IR += name + "_" + to_string(count_block);
-        output_IR += ", " + to_string(i) + "\n";
-        if (aggregate_ptr->at(i)->name == "#")
-          output_IR += "store " + to_string(aggregate_ptr->at(i)->val) + ", " + ptr_name + "\n";
-        else
-          output_IR += "store " + aggregate_ptr->at(i)->name + ", " + ptr_name + "\n";
-        count_ptr++;
-      }
+      int tmp_ind = 0;
+      store_init_array(var_tmp.type.array_len, tmp_ind, aggregate_ptr, (name + "_" + to_string(count_block)));
     }
   }
 };
@@ -2482,12 +2602,7 @@ public:
     {
       if (var_u.var_is_func_param == 1)
       {
-        name = "%" + ident;
-        output_IR += name + " = alloc i32\n";
-        output_IR += "store " + tmp_name + ", " + name + "\n";
-        top_symbol_map->erase(tmp_name);
-        var_u.var_is_func_param = 2;
-        top_symbol_map->insert(tmp_name, var_u);
+        assert(false);
       }
       else if (var_u.var_is_func_param == 2)
       {
@@ -2504,7 +2619,6 @@ public:
   }
 };
 
-// TODO:
 // LVal - ident "[" exp "]" { "[" exp "]" }
 class LValAST_2 : public BaseAST
 {
@@ -2528,17 +2642,68 @@ public:
     VarUnion var_u = top_symbol_map->find(tmp_name);
     assert(var_u.kind != var_kind_ERROR);
 
-    for (int i = 0; i < exps->size(); i++)
+    if (var_u.var_is_func_param == 1)
     {
-      name = "%ptr" + to_string(count_ptr);
-      count_ptr++;
+      assert(false);
+    }
+    else if (var_u.var_is_func_param == 2)
+    {
+      name = "%" + ident;
+    }
+    else
+    {
+      tmp_name = tmp_name + "_" + to_string(var_u.def_block_id);
+    }
 
-      output_IR += name + " = getelemptr " + tmp_name + "_" + to_string(var_u.def_block_id);
-      if (exps->at(i)->name == "#")
-        output_IR += ", " + to_string(exps->at(i)->val) + "\n";
-      else
-        output_IR += ", " + exps->at(i)->name + "\n";
-      tmp_name = name;
+    if (var_u.var_is_func_param == 2)
+    {
+      tmp_name = "%" + to_string(count_var++);
+      output_IR += tmp_name + " = load " + name + "\n";
+
+      for (int i = 0; i < exps->size(); i++)
+      {
+        name = "%ptr" + to_string(count_ptr);
+        count_ptr++;
+
+        if (i == 0)
+        {
+          output_IR += name + " = getptr " + tmp_name;
+        }
+        else
+        {
+          output_IR += name + " = getelemptr " + tmp_name;
+        }
+
+        if (exps->at(i)->name == "#")
+          output_IR += ", " + to_string(exps->at(i)->val) + "\n";
+        else
+          output_IR += ", " + exps->at(i)->name + "\n";
+        tmp_name = name;
+      }
+
+      if (var_u.type.array_len.size() > exps->size())
+      {
+        name = "a" + tmp_name;
+      }
+    }
+    else
+    {
+      for (int i = 0; i < exps->size(); i++)
+      {
+        name = "%ptr" + to_string(count_ptr);
+        count_ptr++;
+
+        output_IR += name + " = getelemptr " + tmp_name;
+        if (exps->at(i)->name == "#")
+          output_IR += ", " + to_string(exps->at(i)->val) + "\n";
+        else
+          output_IR += ", " + exps->at(i)->name + "\n";
+        tmp_name = name;
+      }
+      if (var_u.type.array_len.size() > exps->size())
+      {
+        name = "a" + tmp_name;
+      }
     }
   }
 };
