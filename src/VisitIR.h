@@ -20,11 +20,10 @@ deque<int> stack_frame;
 // Var in symbol map
 enum var_tag
 {
-    Var_in_Reg,
-    Var_in_Stack_pos_int,
-    Var_in_Stack_pos_reg,
-    Var_in_Global,
-    Var_Addr_in_reg,
+    Var_in_Reg,           // a i32 var in reg
+    Var_in_Stack_pos_int, // a var in stack at pos(sp)
+    // alloc应该在stack上开一块空间pos1存变量，然后开一块空间pos2存pos1+sp当作指针，返回指针的pos
+    Var_in_Global, // a pointer, point to a global var
 };
 struct Var
 {
@@ -45,10 +44,9 @@ int count_jump_Label = 0;
 // bb - Label
 map<koopa_raw_basic_block_t, string> mem_map_block;
 
-// count stack size - tmp map and stack
+// count stack size - symbol map : <inst , int>
 int stack_frame_count = 0;
-map<koopa_raw_value_t, string> count_mem_map_reg;
-map<koopa_raw_value_t, int> count_mem_map_stack;
+map<koopa_raw_value_t, int> count_symbol_map;
 set<koopa_raw_basic_block_t> count_mem_map_block;
 // count stack size - if func has call inst
 bool count_has_call = 0;
@@ -93,7 +91,6 @@ void Count_var(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_
 void Count_var(const koopa_raw_func_arg_ref_t &func_arg_refInst, const koopa_raw_value_t &super_value);
 void Count_var(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_value_t &super_value);
 void Count_var(const koopa_raw_get_ptr_t &get_ptrInst, const koopa_raw_value_t &super_value);
-void Count_var(const koopa_raw_aggregate_t &aggregateInst, const koopa_raw_value_t &super_value);
 
 void Visit(const koopa_raw_slice_t &slice);
 
@@ -125,7 +122,7 @@ void Free_reg(string reg)
 {
     if (reg[0] == 'a')
         a[(reg[1] - '0')] = 0;
-    else if(reg[0] == 't')
+    else if (reg[0] == 't')
         t[(reg[1] - '0')] = 0;
 }
 
@@ -231,8 +228,7 @@ void Visit(const koopa_raw_function_t &func)
     int stack_size = 0;
 
     // count siack size - var/func param/func return value
-    count_mem_map_reg.clear();
-    count_mem_map_stack.clear();
+    count_symbol_map.clear();
     stack_frame_count = 0;
     count_mem_map_block.clear();
     count_has_call = 0;
@@ -477,16 +473,9 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
                     Free_reg(tmp_reg);
                 }
             }
-            else if (ret_var.tag == Var_in_Stack_pos_reg)
-            {
-                cout << "add a0, " << ret_var.name + ", sp" << endl;
-                cout << "lw a0, 0(a0)" << endl;
-                risc_symbol_map.erase(retInst.value);
-                Free_reg(ret_var.name);
-            }
             else
             {
-                // global var needs load
+                // func don't return pointer
                 assert(false);
             }
         }
@@ -598,16 +587,9 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
             Free_reg(tmp_reg);
         }
     }
-    else if (left_var.tag == Var_in_Stack_pos_reg)
-    {
-        left_val = Find_reg();
-        cout << "add " << left_val << ", " << left_var.name << ", sp" << endl;
-        cout << "lw " << left_val << ", 0(" + left_val + ")" << endl;
-        risc_symbol_map.erase(binaryInst.lhs);
-        Free_reg(left_var.name);
-    }
     else
     {
+        // pointer can't calculate here
         assert(false);
     }
 
@@ -640,16 +622,9 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
             Free_reg(tmp_reg);
         }
     }
-    else if (right_var.tag == Var_in_Stack_pos_reg)
-    {
-        right_val = Find_reg();
-        cout << "add " << right_val << ", " << right_var.name << ", sp" << endl;
-        cout << "lw " << right_val << ", 0(" + right_val + ")" << endl;
-        risc_symbol_map.erase(binaryInst.rhs);
-        Free_reg(right_var.name);
-    }
     else
     {
+        // pointer can't calculate here
         assert(false);
     }
 
@@ -763,7 +738,10 @@ void Visit(const koopa_raw_global_alloc_t &global_allocInst, const koopa_raw_val
     else if (global_allocInst.init->kind.tag == KOOPA_RVT_AGGREGATE)
         Visit(global_allocInst.init);
     else
-        cout << ".zero 4\n";
+    {
+        // cerr << super_value->ty->data.pointer.base->tag << endl;
+        cout << ".zero " << count_type_size(super_value->ty->data.pointer.base) << "\n";
+    }
 
     Var new_var;
     new_var.name = var_name;
@@ -783,8 +761,34 @@ void Visit_alloc(const koopa_raw_value_t &super_value)
         pos = Find_stack();
     }
 
+    // alloc 返回的是指针
+    // stack[pointer_pos(sp)] = pos + sp
+
+    int pointer_pos = Find_stack();
+    string tmp_reg = Find_reg();
+
+    // pos+sp
+    cout << "li " << tmp_reg << ", " << pos << endl;
+    cout << "add " << tmp_reg << ", " << tmp_reg << ", sp" << endl;
+
+    // pos+sp -> stack[pointer(sp)]
+    if (pointer_pos < 2048)
+    {
+        cout << "sw " << tmp_reg << ", " << pointer_pos << "(sp)\n";
+    }
+    else
+    {
+        string tmp_reg_2 = Find_reg();
+        cout << "li " << tmp_reg_2 << ", " << pointer_pos << endl;
+        cout << "add " + tmp_reg_2 + ", sp, " << tmp_reg_2 << endl;
+        cout << "sw " + tmp_reg + ", 0(" + tmp_reg_2 + ")" << endl;
+        Free_reg(tmp_reg_2);
+    }
+
+    Free_reg(tmp_reg);
+
     Var new_var;
-    new_var.pos = pos;
+    new_var.pos = pointer_pos;
     new_var.tag = Var_in_Stack_pos_int;
     risc_symbol_map.insert(make_pair(super_value, new_var));
 }
@@ -800,17 +804,49 @@ void Visit(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_valu
     assert(risc_symbol_map.count(loadInst.src));
 
     Var src_var = risc_symbol_map.find(loadInst.src)->second;
-    assert(loadInst.src->ty->tag == KOOPA_RTT_POINTER);
 
-    if (src_var.tag == Var_in_Stack_pos_int || src_var.tag == Var_in_Stack_pos_reg)
+    if (src_var.tag == Var_in_Stack_pos_int)
     {
-        // if load var on stack
-        // the return var will push back to stack
-        // do nothing and insert risc_symbol_map
+        // M(stack[pos+sp]) -> new_pos(sp)
+        // stack[pos+sp]
+        string reg = Find_reg();
+
+        if (src_var.pos < 2048)
+        {
+            cout << "lw " << reg << ", " << src_var.pos << "(sp)\n";
+        }
+        else
+        {
+            string tmp_reg = Find_reg();
+            cout << "li " << tmp_reg << ", " << src_var.pos << endl;
+            cout << "add " + tmp_reg + ", sp, " << tmp_reg << endl;
+            cout << "lw " + reg + ", 0(" + tmp_reg + ")" << endl;
+            Free_reg(tmp_reg);
+        }
+        // M(stack[pos+sp]) -> reg
+        cout << "lw " << reg << ", 0(" << reg << ")\n";
+
+        // reg -> new_pos(sp)
+        int pos = Find_stack();
+
+        if (pos < 2048)
+        {
+            cout << "sw " << reg << ", " << pos << "(sp)\n";
+        }
+        else
+        {
+            string tmp_reg = Find_reg();
+            cout << "li " << tmp_reg << ", " << pos << endl;
+            cout << "add " + tmp_reg + ", sp, " << tmp_reg << endl;
+            cout << "sw " + reg + ", 0(" + tmp_reg + ")" << endl;
+            Free_reg(tmp_reg);
+        }
+
+        Free_reg(reg);
+
         Var new_var;
-        new_var.pos = src_var.pos;
-        new_var.name = src_var.name;
-        new_var.tag = src_var.tag;
+        new_var.pos = pos;
+        new_var.tag = Var_in_Stack_pos_int;
         risc_symbol_map.insert(make_pair(super_value, new_var));
     }
     else if (src_var.tag == Var_in_Global)
@@ -839,31 +875,9 @@ void Visit(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_valu
         new_var.tag = Var_in_Stack_pos_int;
         risc_symbol_map.insert(make_pair(super_value, new_var));
     }
-    else if (src_var.tag == Var_Addr_in_reg)
-    {
-        int pos = Find_stack();
-        cout << "lw " << src_var.name << ", 0(" << src_var.name << ")\n";
-        if (pos < 2048)
-        {
-            cout << "sw " << src_var.name << ", " << pos << "(sp)\n";
-        }
-        else
-        {
-            string tmp_reg = Find_reg();
-            cout << "li " << tmp_reg << ", " << pos << endl;
-            cout << "add " + tmp_reg + ", sp, " << tmp_reg << endl;
-            cout << "sw " + src_var.name + ", 0(" + tmp_reg + ")" << endl;
-            Free_reg(tmp_reg);
-        }
-        risc_symbol_map.erase(loadInst.src);
-        Free_reg(src_var.name);
-        Var new_var;
-        new_var.pos = pos;
-        new_var.tag = Var_in_Stack_pos_int;
-        risc_symbol_map.insert(make_pair(super_value, new_var));
-    }
     else
     {
+        // TODO: var in reg can't be a pointer?
         assert(false);
     }
 }
@@ -906,14 +920,9 @@ void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_va
             Free_reg(tmp_reg);
         }
     }
-    else if (put_value.tag == Var_in_Stack_pos_reg)
-    {
-        value_reg = Find_reg();
-        cout << "add " << value_reg << ", " << put_value.name << ", sp" << endl;
-        cout << "lw " << value_reg << ", 0(" + value_reg + ")" << endl;
-    }
     else
     {
+        // global need load
         assert(false);
     }
 
@@ -926,23 +935,24 @@ void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_va
 
     if (dest_var.tag == Var_in_Stack_pos_int)
     {
+        // val -> M(stack[dest.pos+sp])
+        // stack[pos+sp]
+        string reg = Find_reg();
         if (dest_var.pos < 2048)
         {
-            cout << "sw " << value_reg << ", " << dest_var.pos << "(sp)" << endl;
+            cout << "lw " << reg << ", " << dest_var.pos << "(sp)\n";
         }
         else
         {
             string tmp_reg = Find_reg();
             cout << "li " << tmp_reg << ", " << dest_var.pos << endl;
             cout << "add " + tmp_reg + ", sp, " << tmp_reg << endl;
-            cout << "sw " + value_reg + ", 0(" + tmp_reg + ")" << endl;
+            cout << "lw " + reg + ", 0(" + tmp_reg + ")" << endl;
             Free_reg(tmp_reg);
         }
-    }
-    else if (dest_var.tag == Var_in_Stack_pos_reg)
-    {
-        cout << "add " << dest_var.name << ", " << dest_var.name << ", sp" << endl;
-        cout << "sw " << value_reg << ", 0(" + dest_var.name + ")" << endl;
+        // val -> M(stack[pos+sp])
+        cout << "sw " << value_reg << ", 0(" << reg << ")\n";
+        Free_reg(reg);
     }
     else if (dest_var.tag == Var_in_Global)
     {
@@ -951,27 +961,10 @@ void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_va
         cout << "la " << tmp_reg << ", " << dest_var.name << endl;
         cout << "sw " << value_reg << ", 0(" << tmp_reg << ")\n";
     }
-    else if (dest_var.tag == Var_Addr_in_reg)
-    {
-        cout << "sw " << value_reg << ", 0(" << dest_var.name << ")\n";
-        risc_symbol_map.erase(storeInst.dest);
-        Free_reg(dest_var.name);
-    }
     else
     {
         // can't store to a reg
         assert(false);
-    }
-
-    if (put_value.tag == Var_in_Stack_pos_reg)
-    {
-        risc_symbol_map.erase(storeInst.value);
-        Free_reg(put_value.name);
-    }
-    if (dest_var.tag == Var_in_Stack_pos_reg)
-    {
-        risc_symbol_map.erase(storeInst.dest);
-        Free_reg(dest_var.name);
     }
 
     Free_reg(value_reg);
@@ -1025,14 +1018,6 @@ void Visit(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_valu
             cout << "lw " + br_cond + ", 0(" + tmp_reg + ")" << endl;
             Free_reg(tmp_reg);
         }
-    }
-    else if (cond_var.tag == Var_in_Stack_pos_reg)
-    {
-        br_cond = Find_reg();
-        cout << "add " << br_cond << ", " << cond_var.name << ", sp" << endl;
-        cout << "lw " << br_cond << ", 0(" + br_cond + ")" << endl;
-        risc_symbol_map.erase(brInst.cond);
-        Free_reg(cond_var.name);
     }
     else
     {
@@ -1193,7 +1178,6 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
             else
             {
                 string reg = Find_reg();
-                Free_reg(reg);
                 int pos = arg_var.pos;
                 if (pos < 2048)
                 {
@@ -1220,42 +1204,12 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
                     cout << "sw " + reg + ", 0(" + tmp_reg + ")" << endl;
                     Free_reg(tmp_reg);
                 }
-            }
-        }
-        else if (arg_var.tag == Var_in_Stack_pos_reg)
-        {
-            if (i < 8)
-            {
-                string reg = "a0";
-                reg[1] += i;
-                cout << "add " << reg << ", " << arg_var.name << ", sp" << endl;
-                cout << "lw " << reg << ", 0(" + reg + ")" << endl;
-            }
-            else
-            {
-                string reg = Find_reg();
                 Free_reg(reg);
-                cout << "add " << reg << ", " << arg_var.name << ", sp" << endl;
-                cout << "lw " << reg << ", 0(" + reg + ")" << endl;
-                // pos is sp+(i-8)*4
-                if ((i - 8) * 4 < 2048)
-                {
-                    cout << "sw " << reg << ", " << (i - 8) * 4 << "(sp)" << endl;
-                }
-                else
-                {
-                    string tmp_reg = Find_reg();
-                    cout << "li " << tmp_reg << ", " << ((i - 8) * 4) << endl;
-                    cout << "add " + tmp_reg + ", sp, " << tmp_reg << endl;
-                    cout << "sw " + reg + ", 0(" + tmp_reg + ")" << endl;
-                    Free_reg(tmp_reg);
-                }
             }
-            risc_symbol_map.erase(arg_inst);
-            Free_reg(arg_var.name);
         }
         else
         {
+            cerr << arg_var.tag << endl;
             assert(false);
         }
     }
@@ -1362,14 +1316,6 @@ void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_val
             Free_reg(tmp_reg);
         }
     }
-    else if (index_var.tag == Var_in_Stack_pos_reg)
-    {
-        reg_for_index = Find_reg();
-        cout << "add " << reg_for_index << ", " << index_var.name << ", sp" << endl;
-        cout << "lw " << reg_for_index << ", 0(" + reg_for_index + ")" << endl;
-        risc_symbol_map.erase(get_elem_ptrInst.index);
-        Free_reg(index_var.name);
-    }
     else
     {
         assert(false);
@@ -1381,7 +1327,6 @@ void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_val
     cout << "li " << reg_for_size << ", " << count_get_elem_ptr_len(get_elem_ptrInst.src->ty) << endl;
 
     // src
-    string reg_for_sec_pos = Find_reg();
     if (!risc_symbol_map.count(get_elem_ptrInst.src))
         Visit(get_elem_ptrInst.src);
     assert(risc_symbol_map.count(get_elem_ptrInst.src));
@@ -1390,57 +1335,100 @@ void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_val
 
     if (src_var.tag == Var_in_Stack_pos_int)
     {
-        int src_pos = src_var.pos;
-        cout << "li " << reg_for_sec_pos << ", " << src_pos << endl;
-    }
-    else if (src_var.tag == Var_in_Stack_pos_reg)
-    {
-        cout << "mv " << reg_for_sec_pos << ", " << src_var.name << endl;
-        risc_symbol_map.erase(get_elem_ptrInst.src);
-        Free_reg(src_var.name);
+        // 返回的是一个指向 M(stack[pos+sp]+size*index) 的指针
+        // stack[pointer_pos(sp)] = stack[pos+sp]+size*index
+
+        // stack[pos+sp]
+        string reg = Find_reg();
+        if (src_var.pos < 2048)
+        {
+            cout << "lw " << reg << ", " << src_var.pos << "(sp)\n";
+        }
+        else
+        {
+            string tmp_reg = Find_reg();
+            cout << "li " << tmp_reg << ", " << src_var.pos << endl;
+            cout << "add " + tmp_reg + ", sp, " << tmp_reg << endl;
+            cout << "lw " + reg + ", 0(" + tmp_reg + ")" << endl;
+            Free_reg(tmp_reg);
+        }
+
+        Free_reg(reg);
+        Free_reg(reg_for_index);
+
+        // reg_for_size = stack[pos+sp]+size*index
+        cout << "mul " + reg_for_size + ", " + reg_for_index + ", " + reg_for_size << endl;
+        cout << "add " + reg_for_size + ", " + reg_for_size + ", " + reg << endl;
+
+        // pointer_pos(sp) <- reg_for_size
+        int pointer_pos = Find_stack();
+        if (pointer_pos < 2048)
+        {
+            cout << "sw " << reg_for_size << ", " << pointer_pos << "(sp)\n";
+        }
+        else
+        {
+            string tmp_reg_2 = Find_reg();
+            cout << "li " << tmp_reg_2 << ", " << pointer_pos << endl;
+            cout << "add " + tmp_reg_2 + ", sp, " << tmp_reg_2 << endl;
+            cout << "sw " + reg_for_size + ", 0(" + tmp_reg_2 + ")" << endl;
+            Free_reg(tmp_reg_2);
+        }
+
+        Free_reg(reg_for_size);
+
+        Var new_var;
+        new_var.pos = pointer_pos;
+        new_var.tag = Var_in_Stack_pos_int;
+        risc_symbol_map.insert(make_pair(super_value, new_var));
     }
     else if (src_var.tag == Var_in_Global)
     {
-        // TODO
+        // 返回的是一个指向 M(addr+size*index) 的指针
+        // stack[pointer_pos(sp)] = addr+size*index
 
+        string reg_for_sec_pos = Find_reg();
         Free_reg(reg_for_sec_pos);
         Free_reg(reg_for_index);
 
-        // true_ind = reg_for_index * reg_for_size
-        // the addr we want: reg_for_sec_pos + true_ind
+        // addr
         cout << "la " << reg_for_sec_pos << ", " << src_var.name << endl;
 
+        // reg_for_size = addr+size*index
         cout << "mul " + reg_for_size + ", " + reg_for_index + ", " + reg_for_size << endl;
         cout << "add " + reg_for_size + ", " + reg_for_size + ", " + reg_for_sec_pos << endl;
 
-        Var new_var;
-        new_var.name = reg_for_size;
-        new_var.tag = Var_Addr_in_reg;
-        risc_symbol_map.insert(make_pair(super_value, new_var));
+        // pointer_pos(sp) <- reg_for_size
+        int pointer_pos = Find_stack();
+        if (pointer_pos < 2048)
+        {
+            cout << "sw " << reg_for_size << ", " << pointer_pos << "(sp)\n";
+        }
+        else
+        {
+            string tmp_reg_2 = Find_reg();
+            cout << "li " << tmp_reg_2 << ", " << pointer_pos << endl;
+            cout << "add " + tmp_reg_2 + ", sp, " << tmp_reg_2 << endl;
+            cout << "sw " + reg_for_size + ", 0(" + tmp_reg_2 + ")" << endl;
+            Free_reg(tmp_reg_2);
+        }
 
-        return;
+        Free_reg(reg_for_size);
+
+        Var new_var;
+        new_var.pos = pointer_pos;
+        new_var.tag = Var_in_Stack_pos_int;
+        risc_symbol_map.insert(make_pair(super_value, new_var));
     }
     else
     {
+        cerr << src_var.tag << endl;
         assert(false);
     }
-
-    Free_reg(reg_for_sec_pos);
-    Free_reg(reg_for_index);
-
-    // true_ind = reg_for_index * reg_for_size
-    // pos = src_pos + true_ind (+ sp)
-    cout << "mul " + reg_for_size + ", " + reg_for_index + ", " + reg_for_size << endl;
-    cout << "add " + reg_for_size + ", " + reg_for_size + ", " + reg_for_sec_pos << endl;
-
-    Var new_var;
-    new_var.name = reg_for_size;
-    new_var.tag = Var_in_Stack_pos_reg;
-    risc_symbol_map.insert(make_pair(super_value, new_var));
 }
 
 // visit value - get_ptr
-void Visit(const koopa_raw_get_ptr_t &get_ptrInst, const koopa_raw_value_t &super_value)
+void Visit(const koopa_raw_get_ptr_t &get_elem_ptrInst, const koopa_raw_value_t &super_value)
 {
     // typedef struct {
     // /// Source.
@@ -1449,18 +1437,19 @@ void Visit(const koopa_raw_get_ptr_t &get_ptrInst, const koopa_raw_value_t &supe
     // koopa_raw_value_t index;
     // } koopa_raw_get_ptr_t;
 
+    // same as get_elem_ptr
     // index
     string reg_for_index;
-    if (!(risc_symbol_map.count(get_ptrInst.index)))
-        Visit(get_ptrInst.index);
-    assert(risc_symbol_map.count(get_ptrInst.index));
+    if (!(risc_symbol_map.count(get_elem_ptrInst.index)))
+        Visit(get_elem_ptrInst.index);
+    assert(risc_symbol_map.count(get_elem_ptrInst.index));
 
-    Var index_var = risc_symbol_map.find(get_ptrInst.index)->second;
+    Var index_var = risc_symbol_map.find(get_elem_ptrInst.index)->second;
 
     if (index_var.tag == Var_in_Reg)
     {
         reg_for_index = index_var.name;
-        risc_symbol_map.erase(get_ptrInst.index);
+        risc_symbol_map.erase(get_elem_ptrInst.index);
     }
     else if (index_var.tag == Var_in_Stack_pos_int)
     {
@@ -1479,14 +1468,6 @@ void Visit(const koopa_raw_get_ptr_t &get_ptrInst, const koopa_raw_value_t &supe
             Free_reg(tmp_reg);
         }
     }
-    else if (index_var.tag == Var_in_Stack_pos_reg)
-    {
-        reg_for_index = Find_reg();
-        cout << "add " << reg_for_index << ", " << index_var.name << ", sp" << endl;
-        cout << "lw " << reg_for_index << ", 0(" + reg_for_index + ")" << endl;
-        risc_symbol_map.erase(get_ptrInst.index);
-        Free_reg(index_var.name);
-    }
     else
     {
         assert(false);
@@ -1494,66 +1475,108 @@ void Visit(const koopa_raw_get_ptr_t &get_ptrInst, const koopa_raw_value_t &supe
 
     // elem size in src
     string reg_for_size = Find_reg();
-    // cerr << count_get_ptr_len(get_ptrInst.src->ty) << endl;
-    cout << "li " << reg_for_size << ", " << count_get_ptr_len(get_ptrInst.src->ty) << endl;
+    // cerr << count_get_ptr_len(get_elem_ptrInst.src->ty) << endl;
+    cout << "li " << reg_for_size << ", " << count_get_ptr_len(get_elem_ptrInst.src->ty) << endl;
 
     // src
-    string reg_for_sec_pos = Find_reg();
-    if (!risc_symbol_map.count(get_ptrInst.src))
-        Visit(get_ptrInst.src);
-    assert(risc_symbol_map.count(get_ptrInst.src));
+    if (!risc_symbol_map.count(get_elem_ptrInst.src))
+        Visit(get_elem_ptrInst.src);
+    assert(risc_symbol_map.count(get_elem_ptrInst.src));
 
-    Var src_var = risc_symbol_map.find(get_ptrInst.src)->second;
+    Var src_var = risc_symbol_map.find(get_elem_ptrInst.src)->second;
 
     if (src_var.tag == Var_in_Stack_pos_int)
     {
-        int src_pos = src_var.pos;
-        cout << "li " << reg_for_sec_pos << ", " << src_pos << endl;
-    }
-    else if (src_var.tag == Var_in_Stack_pos_reg)
-    {
-        cout << "mv " << reg_for_sec_pos << ", " << src_var.name << endl;
-        risc_symbol_map.erase(get_ptrInst.src);
-        Free_reg(src_var.name);
+        // 返回的是一个指向 M(stack[pos+sp]+size*index) 的指针
+        // stack[pointer_pos(sp)] = stack[pos+sp]+size*index
+
+        // stack[pos+sp]
+        string reg = Find_reg();
+        if (src_var.pos < 2048)
+        {
+            cout << "lw " << reg << ", " << src_var.pos << "(sp)\n";
+        }
+        else
+        {
+            string tmp_reg = Find_reg();
+            cout << "li " << tmp_reg << ", " << src_var.pos << endl;
+            cout << "add " + tmp_reg + ", sp, " << tmp_reg << endl;
+            cout << "lw " + reg + ", 0(" + tmp_reg + ")" << endl;
+            Free_reg(tmp_reg);
+        }
+
+        Free_reg(reg);
+        Free_reg(reg_for_index);
+
+        // reg_for_size = stack[pos+sp]+size*index
+        cout << "mul " + reg_for_size + ", " + reg_for_index + ", " + reg_for_size << endl;
+        cout << "add " + reg_for_size + ", " + reg_for_size + ", " + reg << endl;
+
+        // pointer_pos(sp) <- reg_for_size
+        int pointer_pos = Find_stack();
+        if (pointer_pos < 2048)
+        {
+            cout << "sw " << reg_for_size << ", " << pointer_pos << "(sp)\n";
+        }
+        else
+        {
+            string tmp_reg_2 = Find_reg();
+            cout << "li " << tmp_reg_2 << ", " << pointer_pos << endl;
+            cout << "add " + tmp_reg_2 + ", sp, " << tmp_reg_2 << endl;
+            cout << "sw " + reg_for_size + ", 0(" + tmp_reg_2 + ")" << endl;
+            Free_reg(tmp_reg_2);
+        }
+
+        Free_reg(reg_for_size);
+
+        Var new_var;
+        new_var.pos = pointer_pos;
+        new_var.tag = Var_in_Stack_pos_int;
+        risc_symbol_map.insert(make_pair(super_value, new_var));
     }
     else if (src_var.tag == Var_in_Global)
     {
-        // TODO
+        // 返回的是一个指向 M(addr+size*index) 的指针
+        // stack[pointer_pos(sp)] = addr+size*index
 
+        string reg_for_sec_pos = Find_reg();
         Free_reg(reg_for_sec_pos);
         Free_reg(reg_for_index);
 
-        // true_ind = reg_for_index * reg_for_size
-        // the addr we want: reg_for_sec_pos + true_ind
+        // addr
         cout << "la " << reg_for_sec_pos << ", " << src_var.name << endl;
 
+        // reg_for_size = addr+size*index
         cout << "mul " + reg_for_size + ", " + reg_for_index + ", " + reg_for_size << endl;
         cout << "add " + reg_for_size + ", " + reg_for_size + ", " + reg_for_sec_pos << endl;
 
-        Var new_var;
-        new_var.name = reg_for_size;
-        new_var.tag = Var_Addr_in_reg;
-        risc_symbol_map.insert(make_pair(super_value, new_var));
+        // pointer_pos(sp) <- reg_for_size
+        int pointer_pos = Find_stack();
+        if (pointer_pos < 2048)
+        {
+            cout << "sw " << reg_for_size << ", " << pointer_pos << "(sp)\n";
+        }
+        else
+        {
+            string tmp_reg_2 = Find_reg();
+            cout << "li " << tmp_reg_2 << ", " << pointer_pos << endl;
+            cout << "add " + tmp_reg_2 + ", sp, " << tmp_reg_2 << endl;
+            cout << "sw " + reg_for_size + ", 0(" + tmp_reg_2 + ")" << endl;
+            Free_reg(tmp_reg_2);
+        }
 
-        return;
+        Free_reg(reg_for_size);
+
+        Var new_var;
+        new_var.pos = pointer_pos;
+        new_var.tag = Var_in_Stack_pos_int;
+        risc_symbol_map.insert(make_pair(super_value, new_var));
     }
     else
     {
+        cerr << src_var.tag << endl;
         assert(false);
     }
-
-    Free_reg(reg_for_sec_pos);
-    Free_reg(reg_for_index);
-
-    // true_ind = reg_for_index * reg_for_size
-    // pos = src_pos + true_ind (+ sp)
-    cout << "mul " + reg_for_size + ", " + reg_for_index + ", " + reg_for_size << endl;
-    cout << "add " + reg_for_size + ", " + reg_for_size + ", " + reg_for_sec_pos << endl;
-
-    Var new_var;
-    new_var.name = reg_for_size;
-    new_var.tag = Var_in_Stack_pos_reg;
-    risc_symbol_map.insert(make_pair(super_value, new_var));
 }
 
 // visit value - aggregate
@@ -1701,51 +1724,30 @@ void Count_var(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super
         return;
 
     // count size for return value
-    if (!(count_mem_map_reg.count(retInst.value) || count_mem_map_stack.count(retInst.value)))
+    if (!count_symbol_map.count(retInst.value))
         Count_var(retInst.value);
-    assert(count_mem_map_reg.count(retInst.value) || count_mem_map_stack.count(retInst.value));
-
-    // free reg
-    if (count_mem_map_reg.count(retInst.value))
-    {
-        Free_reg(count_mem_map_reg.find(retInst.value)->second);
-        count_mem_map_reg.erase(retInst.value);
-    }
+    assert(count_symbol_map.count(retInst.value));
 }
 
 // count stack size - value - integer
 void Count_var(const koopa_raw_integer_t &intInst, const koopa_raw_value_t &super_value)
 {
-    string reg = Find_reg();
-    count_mem_map_reg.insert(make_pair(super_value, reg));
-    return;
+    count_symbol_map.insert(make_pair(super_value, 0));
 }
 
 // count stack size - value - binary
 void Count_var(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_value)
 {
-    if (!(count_mem_map_reg.count(binaryInst.lhs) || count_mem_map_stack.count(binaryInst.lhs)))
+    if (!count_symbol_map.count(binaryInst.lhs))
         Count_var(binaryInst.lhs);
-    assert(count_mem_map_reg.count(binaryInst.lhs) || count_mem_map_stack.count(binaryInst.lhs));
+    assert(count_symbol_map.count(binaryInst.lhs));
 
-    if (!(count_mem_map_reg.count(binaryInst.rhs) || count_mem_map_stack.count(binaryInst.rhs)))
+    if (!count_symbol_map.count(binaryInst.rhs))
         Count_var(binaryInst.rhs);
-    assert(count_mem_map_reg.count(binaryInst.rhs) || count_mem_map_stack.count(binaryInst.rhs));
+    assert(count_symbol_map.count(binaryInst.rhs));
 
     int stack_pos = Add_stack_count();
-    count_mem_map_stack.insert(make_pair(super_value, stack_pos));
-
-    // delete reg
-    if (count_mem_map_reg.count(binaryInst.lhs))
-    {
-        Free_reg(count_mem_map_reg.find(binaryInst.lhs)->second);
-        count_mem_map_reg.erase(binaryInst.lhs);
-    }
-    if (count_mem_map_reg.count(binaryInst.rhs))
-    {
-        Free_reg(count_mem_map_reg.find(binaryInst.rhs)->second);
-        count_mem_map_reg.erase(binaryInst.rhs);
-    }
+    count_symbol_map.insert(make_pair(super_value, stack_pos));
 }
 
 // count stack size - value - alloc
@@ -1753,72 +1755,45 @@ void Count_var_alloc(const koopa_raw_value_t &super_value)
 {
     int alloc_size = count_type_size(super_value->ty->data.pointer.base);
 
-    int pos = 0;
-    for (int i = 0; i < alloc_size / 4; i++)
-    {
-        if (i == 0)
-        {
-            pos = Add_stack_count();
-        }
-        else
-        {
-            Add_stack_count();
-        }
-    }
-    count_mem_map_stack.insert(make_pair(super_value, pos));
+    Add_stack_count(alloc_size / 4);
+
+    // stack for pointer
+    int stack_pos = Add_stack_count();
+    count_symbol_map.insert(make_pair(super_value, stack_pos));
 }
 
 // count stack size - value - load
 void Count_var(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_value)
 {
-    if (!(count_mem_map_stack.count(loadInst.src) || risc_symbol_map.count(loadInst.src)))
+    if (!(count_symbol_map.count(loadInst.src) || risc_symbol_map.count(loadInst.src)))
         Count_var(loadInst.src);
-    assert(count_mem_map_stack.count(loadInst.src) || risc_symbol_map.count(loadInst.src));
+    assert(count_symbol_map.count(loadInst.src) || risc_symbol_map.count(loadInst.src));
 
-    if (count_mem_map_stack.count(loadInst.src))
-    {
-        count_mem_map_stack.insert(make_pair(super_value, count_mem_map_stack.find(loadInst.src)->second));
-    }
-    if (risc_symbol_map.count(loadInst.src))
-    {
-        int stack_pos = Add_stack_count();
-        count_mem_map_stack.insert(make_pair(super_value, stack_pos));
-    }
+    int stack_pos = Add_stack_count();
+    count_symbol_map.insert(make_pair(super_value, stack_pos));
 }
 
 // count stack size - value - store
 void Count_var(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_value)
 {
     // count size for put value in reg
-    if (!(count_mem_map_reg.count(storeInst.value) || count_mem_map_stack.count(storeInst.value)))
+    if (!count_symbol_map.count(storeInst.value))
         Count_var(storeInst.value);
-    assert(count_mem_map_reg.count(storeInst.value) || count_mem_map_stack.count(storeInst.value));
-
-    if (count_mem_map_reg.count(storeInst.value))
-    {
-        Free_reg(count_mem_map_reg.find(storeInst.value)->second);
-        count_mem_map_reg.erase(storeInst.value);
-    }
+    assert(count_symbol_map.count(storeInst.value));
 
     // count size for sw reg in dest
-    if (!(count_mem_map_stack.count(storeInst.dest) || risc_symbol_map.count(storeInst.dest)))
+    if (!(count_symbol_map.count(storeInst.dest) || risc_symbol_map.count(storeInst.dest)))
         Count_var(storeInst.dest);
-    assert(count_mem_map_stack.count(storeInst.dest) || risc_symbol_map.count(storeInst.dest));
+    assert(count_symbol_map.count(storeInst.dest) || risc_symbol_map.count(storeInst.dest));
 }
 
 // count stack size - value - br
 void Count_var(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_value)
 {
     // cond
-    if (!(count_mem_map_reg.count(brInst.cond) || count_mem_map_stack.count(brInst.cond)))
+    if (!count_symbol_map.count(brInst.cond))
         Count_var(brInst.cond);
-
-    // free cond reg
-    if (count_mem_map_reg.count(brInst.cond))
-    {
-        Free_reg(count_mem_map_reg.find(brInst.cond)->second);
-        count_mem_map_reg.erase(brInst.cond);
-    }
+    assert(count_symbol_map.count(brInst.cond));
 
     // true/false_bb
     if (!count_mem_map_block.count(brInst.true_bb))
@@ -1843,97 +1818,63 @@ void Count_var(const koopa_raw_jump_t &jumpInst, const koopa_raw_value_t &super_
         count_mem_map_block.insert(jumpInst.target);
         Count_var(jumpInst.target);
     }
-
-    return;
 }
 
 // count stack size - value - call
 void Count_var(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_value)
 {
-    // typedef struct {
-    // /// Callee.
-    // koopa_raw_function_t callee;
-    // /// Arguments.
-    // koopa_raw_slice_t args;
-    // } koopa_raw_call_t;
-
+    // args
     count_has_call = 1;
     if (callInst.args.len > 8)
         Add_stack_count(callInst.args.len - 8);
 
     // store return value need a pos
     int pos = Add_stack_count();
-    count_mem_map_stack.insert(make_pair(super_value, pos));
-
-    return;
+    count_symbol_map.insert(make_pair(super_value, pos));
 }
 
 // count stack size - value - func_arg
 void Count_var(const koopa_raw_func_arg_ref_t &func_arg_refInst, const koopa_raw_value_t &super_value)
 {
-    if (func_arg_refInst.index < 8)
-    {
-        // a0~a7
-        string reg = "a0";
-        reg[1] += func_arg_refInst.index;
-        count_mem_map_reg.insert(make_pair(super_value, reg));
-    }
-    else
-    {
-        // in pre func's stack, not important in count stack size part
-        count_mem_map_stack.insert(make_pair(super_value, 0));
-    }
-    return;
+    // 0~7 - in reg
+    // >7 - in pre caller's stack
+    count_symbol_map.insert(make_pair(super_value, 0));
 }
 
 // count stack size - value - get_elem_ptr
 void Count_var(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_value_t &super_value)
 {
-    // typedef struct {
-    // /// Source.
-    // koopa_raw_value_t src;
-    // /// Index.
-    // koopa_raw_value_t index;
-    // } koopa_raw_get_elem_ptr_t;
+    // index
+    if (!(count_symbol_map.count(get_elem_ptrInst.index)))
+        Count_var(get_elem_ptrInst.index);
+    assert(count_symbol_map.count(get_elem_ptrInst.index));
 
-    if (!(count_mem_map_stack.count(get_elem_ptrInst.src) || risc_symbol_map.count(get_elem_ptrInst.src)))
+    // src
+    if (!(count_symbol_map.count(get_elem_ptrInst.src) || risc_symbol_map.count(get_elem_ptrInst.src)))
         Count_var(get_elem_ptrInst.src);
-    assert(count_mem_map_stack.count(get_elem_ptrInst.src) || risc_symbol_map.count(get_elem_ptrInst.src));
+    assert(count_symbol_map.count(get_elem_ptrInst.src) || risc_symbol_map.count(get_elem_ptrInst.src));
 
-    if (count_mem_map_stack.count(get_elem_ptrInst.src))
-    {
-        count_mem_map_stack.insert(make_pair(super_value, 0));
-    }
-    if (risc_symbol_map.count(get_elem_ptrInst.src))
-    {
-        string reg = Find_reg();
-        count_mem_map_reg.insert(make_pair(super_value, reg));
-    }
+    // stack for pointer
+    int pos = Add_stack_count();
 
-    Add_stack_count();
+    count_symbol_map.insert(make_pair(super_value, pos));
 }
 
 // count stack size - value - get_ptr
 void Count_var(const koopa_raw_get_ptr_t &get_ptrInst, const koopa_raw_value_t &super_value)
 {
-    if (!(count_mem_map_stack.count(get_ptrInst.src) || risc_symbol_map.count(get_ptrInst.src)))
+    // index
+    if (!(count_symbol_map.count(get_ptrInst.index)))
+        Count_var(get_ptrInst.index);
+    assert(count_symbol_map.count(get_ptrInst.index));
+
+    // src
+    if (!(count_symbol_map.count(get_ptrInst.src) || risc_symbol_map.count(get_ptrInst.src)))
         Count_var(get_ptrInst.src);
-    assert(count_mem_map_stack.count(get_ptrInst.src) || risc_symbol_map.count(get_ptrInst.src));
+    assert(count_symbol_map.count(get_ptrInst.src) || risc_symbol_map.count(get_ptrInst.src));
 
-    if (count_mem_map_stack.count(get_ptrInst.src))
-    {
-        count_mem_map_stack.insert(make_pair(super_value, 0));
-    }
-    if (risc_symbol_map.count(get_ptrInst.src))
-    {
-        string reg = Find_reg();
-        count_mem_map_reg.insert(make_pair(super_value, reg));
-    }
+    // stack for pointer
+    int pos = Add_stack_count();
 
-    Add_stack_count();
-}
-
-// count stack size - value - aggregate
-void Count_var(const koopa_raw_aggregate_t &aggregateInst, const koopa_raw_value_t &super_value)
-{
+    count_symbol_map.insert(make_pair(super_value, pos));
 }
