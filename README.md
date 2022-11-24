@@ -23,14 +23,10 @@ cd compiler/
 python3 make_run.py -k/r
 ```
 
-3. 本地测试所有目前做完的部分
+3. 本地测试
    
    local test
 
 ```sh
 python3 test_old.py
 ```
-
-## TODO List：
-
-1. Lv9 array
