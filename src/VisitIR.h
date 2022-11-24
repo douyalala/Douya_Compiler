@@ -160,7 +160,7 @@ int count_type_size(koopa_raw_type_t ty)
         break;
     case KOOPA_RTT_FUNCTION:
         // can't count this
-    default:
+    default:;
         // assert(false);
     }
 }
@@ -428,7 +428,7 @@ void Visit(const koopa_raw_value_t &value)
         // visit func_arg
         Visit(kind.data.func_arg_ref, value);
         break;
-    default:
+    default:;
         // assert(false);
     }
 }
@@ -1626,7 +1626,7 @@ void Visit(const koopa_raw_slice_t &slice)
             // visit value
             Visit(reinterpret_cast<koopa_raw_value_t>(ptr));
             break;
-        default:
+        default:;
             // assert(false);
         }
     }
