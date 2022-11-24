@@ -100,7 +100,7 @@ int main(int argc, const char *argv[])
   koopa_delete_program(program);
 
   // risecv mode
-  if (mode[1] == 'r')
+  if (mode[1] == 'r' || mode[1] == 'p')
   {
     // output redirection
     freopen(output, "w+", stdout);
