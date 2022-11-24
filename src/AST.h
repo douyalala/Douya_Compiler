@@ -335,7 +335,7 @@ public:
   {
     string tmp_name = "@" + ident;
     VarUnion var_u = top_symbol_map->find(tmp_name);
-    assert(var_u.kind != var_kind_ERROR);
+    // assert(var_u.kind != var_kind_ERROR);
 
     name = "%" + ident;
     output_IR += name + " = alloc " + var_u.type.type + "\n";
@@ -365,7 +365,7 @@ public:
     for (int i = 0; i < const_exps->size(); i++)
     {
       const_exps->at(i)->printIR();
-      assert(const_exps->at(i)->name == "#");
+      // assert(const_exps->at(i)->name == "#");
     }
 
     string param_name = "@" + ident;
@@ -398,7 +398,7 @@ public:
   {
     string tmp_name = "@" + ident;
     VarUnion var_u = top_symbol_map->find(tmp_name);
-    assert(var_u.kind != var_kind_ERROR);
+    // assert(var_u.kind != var_kind_ERROR);
 
     name = "%" + ident;
     output_IR += name + " = alloc " + var_u.type.type + "\n";
@@ -567,7 +567,7 @@ public:
   void printIR() override
   {
     l_val->printIR();
-    assert(l_val->name != "#");
+    // assert(l_val->name != "#");
 
     string l_val_name = l_val->name;
 
@@ -1987,7 +1987,7 @@ public:
   void printIR() override
   {
     const_exp->printIR();
-    assert(const_exp->name == "#");
+    // assert(const_exp->name == "#");
     val = const_exp->val;
   }
 };
@@ -2037,11 +2037,11 @@ public:
       {
         int tmp_layer = array_len.size() - 1;
         int mul = array_len.at(tmp_layer);
-        assert(res->size() % array_len.at(tmp_layer) == 0);
+        // assert(res->size() % array_len.at(tmp_layer) == 0);
         // find the largest layer
         while (1)
         {
-          assert(tmp_layer != 0);
+          // assert(tmp_layer != 0);
           if ((res->size() % (mul * array_len.at(tmp_layer - 1))) == 0)
           {
             if ((tmp_layer - 1) == 0)
@@ -2099,7 +2099,7 @@ public:
     name = "@" + ident;
     string b_type = "i32";
     const_init_val->printIR();
-    assert(const_init_val->name == "#");
+    // assert(const_init_val->name == "#");
     VarUnion const_tmp;
     const_tmp.kind = var_kind_CONST;
     const_tmp.type.type = b_type;
@@ -2132,7 +2132,7 @@ public:
     for (int i = 0; i < const_exps->size(); i++)
     {
       const_exps->at(i)->printIR();
-      assert(const_exps->at(i)->name == "#");
+      // assert(const_exps->at(i)->name == "#");
     }
 
     const_init_val->printIR();
@@ -2152,7 +2152,7 @@ public:
       top_symbol_map->insert(name, const_tmp);
 
       deque<BaseAST *> *aggregate_ptr = const_init_val->get_array_aggregate(const_tmp.type.array_len);
-      assert(aggregate_ptr != nullptr);
+      // assert(aggregate_ptr != nullptr);
 
       int tmp_ind = 0;
       string array_type = get_array_type_in_IR(const_tmp.type.array_len, 0);
@@ -2177,7 +2177,7 @@ public:
       output_IR += " = alloc " + get_array_type_in_IR(const_tmp.type.array_len, 0) + "\n";
 
       deque<BaseAST *> *aggregate_ptr = const_init_val->get_array_aggregate(const_tmp.type.array_len);
-      assert(aggregate_ptr != nullptr);
+      // assert(aggregate_ptr != nullptr);
 
       int tmp_ind = 0;
       store_init_array(const_tmp.type.array_len, tmp_ind, aggregate_ptr, (name + "_" + to_string(count_block)));
@@ -2284,11 +2284,11 @@ public:
       {
         int tmp_layer = array_len.size() - 1;
         int mul = array_len.at(tmp_layer);
-        assert(res->size() % array_len.at(tmp_layer) == 0);
+        // assert(res->size() % array_len.at(tmp_layer) == 0);
 
         while (1)
         {
-          assert(tmp_layer != 0);
+          // assert(tmp_layer != 0);
           if ((res->size() % (mul * array_len.at(tmp_layer - 1))) == 0)
           {
             if ((tmp_layer - 1) == 0)
@@ -2396,7 +2396,7 @@ public:
       var_tmp.def_block_id = count_block;
 
       init_val->printIR();
-      assert(init_val->name == "#");
+      // assert(init_val->name == "#");
       var_tmp.var_is_func_param = 0;
 
       top_symbol_map->insert(name, var_tmp);
@@ -2456,7 +2456,7 @@ public:
     for (int i = 0; i < const_exps->size(); i++)
     {
       const_exps->at(i)->printIR();
-      assert(const_exps->at(i)->name == "#");
+      // assert(const_exps->at(i)->name == "#");
     }
 
     VarUnion var_tmp;
@@ -2519,11 +2519,11 @@ public:
     name = "@" + ident;
     string b_type = "i32";
 
-    assert(const_exps != nullptr);
+    // assert(const_exps != nullptr);
     for (int i = 0; i < const_exps->size(); i++)
     {
       const_exps->at(i)->printIR();
-      assert(const_exps->at(i)->name == "#");
+      // assert(const_exps->at(i)->name == "#");
     }
 
     init_val->printIR();
@@ -2542,7 +2542,7 @@ public:
       top_symbol_map->insert(name, var_tmp);
 
       deque<BaseAST *> *aggregate_ptr = init_val->get_array_aggregate(var_tmp.type.array_len);
-      assert(aggregate_ptr != nullptr);
+      // assert(aggregate_ptr != nullptr);
 
       int tmp_ind = 0;
       string array_type = get_array_type_in_IR(var_tmp.type.array_len, 0);
@@ -2566,7 +2566,7 @@ public:
       output_IR += " = alloc " + get_array_type_in_IR(var_tmp.type.array_len, 0) + "\n";
 
       deque<BaseAST *> *aggregate_ptr = init_val->get_array_aggregate(var_tmp.type.array_len);
-      assert(aggregate_ptr != nullptr);
+      // assert(aggregate_ptr != nullptr);
 
       int tmp_ind = 0;
       store_init_array(var_tmp.type.array_len, tmp_ind, aggregate_ptr, (name + "_" + to_string(count_block)));
@@ -2589,7 +2589,7 @@ public:
   {
     string tmp_name = "@" + ident;
     VarUnion var_u = top_symbol_map->find(tmp_name);
-    assert(var_u.kind != var_kind_ERROR);
+    // assert(var_u.kind != var_kind_ERROR);
     if (var_u.kind == var_kind_CONST)
     {
       name = "#";
@@ -2602,7 +2602,7 @@ public:
     {
       if (var_u.var_is_func_param == 1)
       {
-        assert(false);
+        // assert(false);
       }
       else if (var_u.var_is_func_param == 2)
       {
@@ -2640,11 +2640,11 @@ public:
 
     string tmp_name = "@" + ident;
     VarUnion var_u = top_symbol_map->find(tmp_name);
-    assert(var_u.kind != var_kind_ERROR);
+    // assert(var_u.kind != var_kind_ERROR);
 
     if (var_u.var_is_func_param == 1)
     {
-      assert(false);
+      // assert(false);
     }
     else if (var_u.var_is_func_param == 2)
     {
@@ -2722,7 +2722,7 @@ public:
   void printIR() override
   {
     exp->printIR();
-    assert(exp->name == "#");
+    // assert(exp->name == "#");
     val = exp->val;
   }
 };

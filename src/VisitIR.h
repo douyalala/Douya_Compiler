@@ -161,20 +161,20 @@ int count_type_size(koopa_raw_type_t ty)
     case KOOPA_RTT_FUNCTION:
         // can't count this
     default:
-        assert(false);
+        // assert(false);
     }
 }
 
 int count_get_elem_ptr_len(koopa_raw_type_t ty)
 {
-    assert(ty->tag == KOOPA_RTT_POINTER);
-    assert(ty->data.pointer.base->tag == KOOPA_RTT_ARRAY);
+    // assert(ty->tag == KOOPA_RTT_POINTER);
+    // assert(ty->data.pointer.base->tag == KOOPA_RTT_ARRAY);
     return count_type_size(ty->data.pointer.base->data.array.base);
 }
 
 int count_get_ptr_len(koopa_raw_type_t ty)
 {
-    assert(ty->tag == KOOPA_RTT_POINTER);
+    // assert(ty->tag == KOOPA_RTT_POINTER);
     return count_type_size(ty->data.pointer.base);
 }
 
@@ -188,7 +188,7 @@ void Visit(const koopa_raw_program_t &program)
     // koopa_raw_slice_t funcs;
 
     // visit global value
-    assert(program.values.kind == KOOPA_RSIK_VALUE);
+    // assert(program.values.kind == KOOPA_RSIK_VALUE);
     for (int i = 0; i < program.values.len; i++)
     {
         koopa_raw_value_t inst = (koopa_raw_value_t)program.values.buffer[i];
@@ -198,7 +198,7 @@ void Visit(const koopa_raw_program_t &program)
     // visit func
     for (size_t i = 0; i < program.funcs.len; ++i)
     {
-        assert(program.funcs.kind == KOOPA_RSIK_FUNCTION);
+        // assert(program.funcs.kind == KOOPA_RSIK_FUNCTION);
         koopa_raw_function_t func = (koopa_raw_function_t)program.funcs.buffer[i];
         Visit(func);
     }
@@ -234,7 +234,7 @@ void Visit(const koopa_raw_function_t &func)
     count_has_call = 0;
     for (size_t i = 0; i < func->bbs.len; ++i)
     {
-        assert(func->bbs.kind == KOOPA_RSIK_BASIC_BLOCK);
+        // assert(func->bbs.kind == KOOPA_RSIK_BASIC_BLOCK);
         koopa_raw_basic_block_t bb = (koopa_raw_basic_block_t)func->bbs.buffer[i];
         Count_var(bb);
     }
@@ -297,7 +297,7 @@ void Visit(const koopa_raw_function_t &func)
     // visit bb
     for (size_t i = 0; i < func->bbs.len; ++i)
     {
-        assert(func->bbs.kind == KOOPA_RSIK_BASIC_BLOCK);
+        // assert(func->bbs.kind == KOOPA_RSIK_BASIC_BLOCK);
         koopa_raw_basic_block_t bb = (koopa_raw_basic_block_t)func->bbs.buffer[i];
         if (!mem_map_block.count(bb))
             Visit(bb);
@@ -329,7 +329,7 @@ void Visit(const koopa_raw_basic_block_t &bb)
     // visit value
     for (size_t i = 0; i < bb->insts.len; ++i)
     {
-        assert(bb->insts.kind == KOOPA_RSIK_VALUE);
+        // assert(bb->insts.kind == KOOPA_RSIK_VALUE);
         koopa_raw_value_t inst = (koopa_raw_value_t)bb->insts.buffer[i];
         Visit(inst);
     }
@@ -354,7 +354,7 @@ void Visit(const koopa_raw_basic_block_t &bb, string Label)
     // visit value
     for (size_t i = 0; i < bb->insts.len; ++i)
     {
-        assert(bb->insts.kind == KOOPA_RSIK_VALUE);
+        // assert(bb->insts.kind == KOOPA_RSIK_VALUE);
         koopa_raw_value_t inst = (koopa_raw_value_t)bb->insts.buffer[i];
         Visit(inst);
     }
@@ -429,7 +429,7 @@ void Visit(const koopa_raw_value_t &value)
         Visit(kind.data.func_arg_ref, value);
         break;
     default:
-        assert(false);
+        // assert(false);
     }
 }
 
@@ -449,7 +449,7 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
         {
             if (!risc_symbol_map.count(retInst.value))
                 Visit(retInst.value);
-            assert(risc_symbol_map.count(retInst.value));
+            // assert(risc_symbol_map.count(retInst.value));
             Var ret_var = risc_symbol_map.find(retInst.value)->second;
 
             if (ret_var.tag == Var_in_Reg)
@@ -476,7 +476,7 @@ void Visit(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super_val
             else
             {
                 // func don't return pointer
-                assert(false);
+                // assert(false);
             }
         }
     }
@@ -560,7 +560,7 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
 
     if (!risc_symbol_map.count(binaryInst.lhs))
         Visit(binaryInst.lhs);
-    assert(risc_symbol_map.count(binaryInst.lhs));
+    // assert(risc_symbol_map.count(binaryInst.lhs));
 
     Var left_var = risc_symbol_map.find(binaryInst.lhs)->second;
     // cout << "left_var: " << left_var.tag << " " << left_var.name << " " << left_var.pos << endl;
@@ -590,12 +590,12 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
     else
     {
         // pointer can't calculate here
-        assert(false);
+        // assert(false);
     }
 
     if (!risc_symbol_map.count(binaryInst.rhs))
         Visit(binaryInst.rhs);
-    assert(risc_symbol_map.count(binaryInst.rhs));
+    // assert(risc_symbol_map.count(binaryInst.rhs));
 
     Var right_var = risc_symbol_map.find(binaryInst.rhs)->second;
     // cout << "right_var: " << right_var.tag << " " << right_var.name << " " << right_var.pos << endl;
@@ -625,7 +625,7 @@ void Visit(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &super_
     else
     {
         // pointer can't calculate here
-        assert(false);
+        // assert(false);
     }
 
     Free_reg(left_val);
@@ -801,7 +801,7 @@ void Visit(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_valu
 
     if (!(risc_symbol_map.count(loadInst.src)))
         Visit(loadInst.src);
-    assert(risc_symbol_map.count(loadInst.src));
+    // assert(risc_symbol_map.count(loadInst.src));
 
     Var src_var = risc_symbol_map.find(loadInst.src)->second;
 
@@ -878,7 +878,7 @@ void Visit(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_valu
     else
     {
         // TODO: var in reg can't be a pointer?
-        assert(false);
+        // assert(false);
     }
 }
 
@@ -894,7 +894,7 @@ void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_va
     string value_reg;
     if (!risc_symbol_map.count(storeInst.value))
         Visit(storeInst.value);
-    assert(risc_symbol_map.count(storeInst.value));
+    // assert(risc_symbol_map.count(storeInst.value));
 
     Var put_value = risc_symbol_map.find(storeInst.value)->second;
     // cout << "put_value: " << put_value.tag << " " << put_value.name<<endl;
@@ -923,13 +923,13 @@ void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_va
     else
     {
         // global need load
-        assert(false);
+        // assert(false);
     }
 
     // sw reg to dest
     if (!risc_symbol_map.count(storeInst.dest))
         Visit(storeInst.dest);
-    assert(risc_symbol_map.count(storeInst.dest));
+    // assert(risc_symbol_map.count(storeInst.dest));
 
     Var dest_var = risc_symbol_map.find(storeInst.dest)->second;
 
@@ -964,7 +964,7 @@ void Visit(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &super_va
     else
     {
         // can't store to a reg
-        assert(false);
+        // assert(false);
     }
 
     Free_reg(value_reg);
@@ -993,7 +993,7 @@ void Visit(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_valu
 
     if (!risc_symbol_map.count(brInst.cond))
         Visit(brInst.cond);
-    assert(risc_symbol_map.count(brInst.cond));
+    // assert(risc_symbol_map.count(brInst.cond));
 
     Var cond_var = risc_symbol_map.find(brInst.cond)->second;
 
@@ -1021,7 +1021,7 @@ void Visit(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_valu
     }
     else
     {
-        assert(false);
+        // assert(false);
     }
 
     Free_reg(br_cond);
@@ -1099,7 +1099,7 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
     // koopa_raw_slice_t args;
     // } koopa_raw_call_t;
 
-    assert(callInst.args.kind == KOOPA_RSIK_VALUE);
+    // assert(callInst.args.kind == KOOPA_RSIK_VALUE);
     for (int i = 0; i < callInst.args.len; i++)
     {
         koopa_raw_value_t arg_inst = (koopa_raw_value_t)callInst.args.buffer[i];
@@ -1118,7 +1118,7 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
         koopa_raw_value_t arg_inst = (koopa_raw_value_t)callInst.args.buffer[i];
         if (!(risc_symbol_map.count(arg_inst)))
             Visit(arg_inst);
-        assert(risc_symbol_map.count(arg_inst));
+        // assert(risc_symbol_map.count(arg_inst));
 
         Var arg_var = risc_symbol_map.find(arg_inst)->second;
 
@@ -1210,7 +1210,7 @@ void Visit(const koopa_raw_call_t &callInst, const koopa_raw_value_t &super_valu
         else
         {
             cerr << arg_var.tag << endl;
-            assert(false);
+            // assert(false);
         }
     }
 
@@ -1290,7 +1290,7 @@ void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_val
     string reg_for_index;
     if (!(risc_symbol_map.count(get_elem_ptrInst.index)))
         Visit(get_elem_ptrInst.index);
-    assert(risc_symbol_map.count(get_elem_ptrInst.index));
+    // assert(risc_symbol_map.count(get_elem_ptrInst.index));
 
     Var index_var = risc_symbol_map.find(get_elem_ptrInst.index)->second;
 
@@ -1318,7 +1318,7 @@ void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_val
     }
     else
     {
-        assert(false);
+        // assert(false);
     }
 
     // elem size in src
@@ -1329,7 +1329,7 @@ void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_val
     // src
     if (!risc_symbol_map.count(get_elem_ptrInst.src))
         Visit(get_elem_ptrInst.src);
-    assert(risc_symbol_map.count(get_elem_ptrInst.src));
+    // assert(risc_symbol_map.count(get_elem_ptrInst.src));
 
     Var src_var = risc_symbol_map.find(get_elem_ptrInst.src)->second;
 
@@ -1423,7 +1423,7 @@ void Visit(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw_val
     else
     {
         cerr << src_var.tag << endl;
-        assert(false);
+        // assert(false);
     }
 }
 
@@ -1442,7 +1442,7 @@ void Visit(const koopa_raw_get_ptr_t &get_elem_ptrInst, const koopa_raw_value_t 
     string reg_for_index;
     if (!(risc_symbol_map.count(get_elem_ptrInst.index)))
         Visit(get_elem_ptrInst.index);
-    assert(risc_symbol_map.count(get_elem_ptrInst.index));
+    // assert(risc_symbol_map.count(get_elem_ptrInst.index));
 
     Var index_var = risc_symbol_map.find(get_elem_ptrInst.index)->second;
 
@@ -1470,7 +1470,7 @@ void Visit(const koopa_raw_get_ptr_t &get_elem_ptrInst, const koopa_raw_value_t 
     }
     else
     {
-        assert(false);
+        // assert(false);
     }
 
     // elem size in src
@@ -1481,7 +1481,7 @@ void Visit(const koopa_raw_get_ptr_t &get_elem_ptrInst, const koopa_raw_value_t 
     // src
     if (!risc_symbol_map.count(get_elem_ptrInst.src))
         Visit(get_elem_ptrInst.src);
-    assert(risc_symbol_map.count(get_elem_ptrInst.src));
+    // assert(risc_symbol_map.count(get_elem_ptrInst.src));
 
     Var src_var = risc_symbol_map.find(get_elem_ptrInst.src)->second;
 
@@ -1575,7 +1575,7 @@ void Visit(const koopa_raw_get_ptr_t &get_elem_ptrInst, const koopa_raw_value_t 
     else
     {
         cerr << src_var.tag << endl;
-        assert(false);
+        // assert(false);
     }
 }
 
@@ -1600,7 +1600,7 @@ void Visit(const koopa_raw_aggregate_t &aggregateInst, const koopa_raw_value_t &
         }
         else
         {
-            assert(false);
+            // assert(false);
         }
     }
 }
@@ -1627,7 +1627,7 @@ void Visit(const koopa_raw_slice_t &slice)
             Visit(reinterpret_cast<koopa_raw_value_t>(ptr));
             break;
         default:
-            assert(false);
+            // assert(false);
         }
     }
 }
@@ -1638,7 +1638,7 @@ void Count_var(const koopa_raw_basic_block_t &bb)
     // 计算所有指令的变量数量
     for (size_t i = 0; i < bb->insts.len; ++i)
     {
-        assert(bb->insts.kind == KOOPA_RSIK_VALUE);
+        // assert(bb->insts.kind == KOOPA_RSIK_VALUE);
         koopa_raw_value_t inst = (koopa_raw_value_t)bb->insts.buffer[i];
         Count_var(inst);
     }
@@ -1709,7 +1709,7 @@ void Count_var(const koopa_raw_value_t &value)
         // KOOPA_RVT_BLOCK_ARG_REF
         // KOOPA_RVT_UNDEF
         cout << kind.tag << endl;
-        assert(false);
+        // assert(false);
     }
 }
 
@@ -1726,7 +1726,7 @@ void Count_var(const koopa_raw_return_t &retInst, const koopa_raw_value_t &super
     // count size for return value
     if (!count_symbol_map.count(retInst.value))
         Count_var(retInst.value);
-    assert(count_symbol_map.count(retInst.value));
+    // assert(count_symbol_map.count(retInst.value));
 }
 
 // count stack size - value - integer
@@ -1740,11 +1740,11 @@ void Count_var(const koopa_raw_binary_t &binaryInst, const koopa_raw_value_t &su
 {
     if (!count_symbol_map.count(binaryInst.lhs))
         Count_var(binaryInst.lhs);
-    assert(count_symbol_map.count(binaryInst.lhs));
+    // assert(count_symbol_map.count(binaryInst.lhs));
 
     if (!count_symbol_map.count(binaryInst.rhs))
         Count_var(binaryInst.rhs);
-    assert(count_symbol_map.count(binaryInst.rhs));
+    // assert(count_symbol_map.count(binaryInst.rhs));
 
     int stack_pos = Add_stack_count();
     count_symbol_map.insert(make_pair(super_value, stack_pos));
@@ -1767,7 +1767,7 @@ void Count_var(const koopa_raw_load_t &loadInst, const koopa_raw_value_t &super_
 {
     if (!(count_symbol_map.count(loadInst.src) || risc_symbol_map.count(loadInst.src)))
         Count_var(loadInst.src);
-    assert(count_symbol_map.count(loadInst.src) || risc_symbol_map.count(loadInst.src));
+    // assert(count_symbol_map.count(loadInst.src) || risc_symbol_map.count(loadInst.src));
 
     int stack_pos = Add_stack_count();
     count_symbol_map.insert(make_pair(super_value, stack_pos));
@@ -1779,12 +1779,12 @@ void Count_var(const koopa_raw_store_t &storeInst, const koopa_raw_value_t &supe
     // count size for put value in reg
     if (!count_symbol_map.count(storeInst.value))
         Count_var(storeInst.value);
-    assert(count_symbol_map.count(storeInst.value));
+    // assert(count_symbol_map.count(storeInst.value));
 
     // count size for sw reg in dest
     if (!(count_symbol_map.count(storeInst.dest) || risc_symbol_map.count(storeInst.dest)))
         Count_var(storeInst.dest);
-    assert(count_symbol_map.count(storeInst.dest) || risc_symbol_map.count(storeInst.dest));
+    // assert(count_symbol_map.count(storeInst.dest) || risc_symbol_map.count(storeInst.dest));
 }
 
 // count stack size - value - br
@@ -1793,7 +1793,7 @@ void Count_var(const koopa_raw_branch_t &brInst, const koopa_raw_value_t &super_
     // cond
     if (!count_symbol_map.count(brInst.cond))
         Count_var(brInst.cond);
-    assert(count_symbol_map.count(brInst.cond));
+    // assert(count_symbol_map.count(brInst.cond));
 
     // true/false_bb
     if (!count_mem_map_block.count(brInst.true_bb))
@@ -1847,12 +1847,12 @@ void Count_var(const koopa_raw_get_elem_ptr_t &get_elem_ptrInst, const koopa_raw
     // index
     if (!(count_symbol_map.count(get_elem_ptrInst.index)))
         Count_var(get_elem_ptrInst.index);
-    assert(count_symbol_map.count(get_elem_ptrInst.index));
+    // assert(count_symbol_map.count(get_elem_ptrInst.index));
 
     // src
     if (!(count_symbol_map.count(get_elem_ptrInst.src) || risc_symbol_map.count(get_elem_ptrInst.src)))
         Count_var(get_elem_ptrInst.src);
-    assert(count_symbol_map.count(get_elem_ptrInst.src) || risc_symbol_map.count(get_elem_ptrInst.src));
+    // assert(count_symbol_map.count(get_elem_ptrInst.src) || risc_symbol_map.count(get_elem_ptrInst.src));
 
     // stack for pointer
     int pos = Add_stack_count();
@@ -1866,12 +1866,12 @@ void Count_var(const koopa_raw_get_ptr_t &get_ptrInst, const koopa_raw_value_t &
     // index
     if (!(count_symbol_map.count(get_ptrInst.index)))
         Count_var(get_ptrInst.index);
-    assert(count_symbol_map.count(get_ptrInst.index));
+    // assert(count_symbol_map.count(get_ptrInst.index));
 
     // src
     if (!(count_symbol_map.count(get_ptrInst.src) || risc_symbol_map.count(get_ptrInst.src)))
         Count_var(get_ptrInst.src);
-    assert(count_symbol_map.count(get_ptrInst.src) || risc_symbol_map.count(get_ptrInst.src));
+    // assert(count_symbol_map.count(get_ptrInst.src) || risc_symbol_map.count(get_ptrInst.src));
 
     // stack for pointer
     int pos = Add_stack_count();
