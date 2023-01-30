@@ -33,7 +33,6 @@ struct VarUnion
     int def_block_id;
     // if const
     // if type=[i32]: val={val}
-    // TODO:
     deque<int> val;
     // if var, if it is a func's param
     int var_is_func_param = 0;

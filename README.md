@@ -1,8 +1,8 @@
 # Douya's Compiler For PKU Compiler Principles Course
 
-它曾经是：**基于 Makefile 的 SysY 编译器项目模板(https://github.com/pku-minic/sysy-make-template)**
+它是基于：**基于 Makefile 的 SysY 编译器项目模板(https://github.com/pku-minic/sysy-make-template)**
 
-It used to be **SysY Make Template(https://github.com/pku-minic/sysy-make-template)**
+It is based on **SysY Make Template(https://github.com/pku-minic/sysy-make-template)**
 
 ## Usage
 

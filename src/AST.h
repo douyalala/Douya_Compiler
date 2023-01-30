@@ -2286,6 +2286,7 @@ public:
         int mul = array_len.at(tmp_layer);
         // assert(res->size() % array_len.at(tmp_layer) == 0);
 
+        // find the biggest align bound
         while (1)
         {
           // assert(tmp_layer != 0);
@@ -2531,7 +2532,7 @@ public:
     VarUnion var_tmp;
     if (top_symbol_map->outer_map == nullptr)
     {
-      var_tmp.kind = var_kind_NOT_INIT_GLOBAL_VAR;
+      var_tmp.kind = var_kind_INIT_GLOBAL_VAR;
       var_tmp.type.type = b_type;
       for (int i = 0; i < const_exps->size(); i++)
       {

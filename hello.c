@@ -2,8 +2,6 @@ int buf[2][100];
 
 // sort [l, r)
 
-/* wejwcwinw""******/"*/
-
 int main()
 {
     int n = getarray(buf[0]);
