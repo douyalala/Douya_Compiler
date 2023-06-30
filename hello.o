@@ -1,0 +1,10 @@
+.data
+.globl buf_0
+buf_0:
+.zero 800
+
+.text
+.globl main
+main:
+li a0, 0
+ret

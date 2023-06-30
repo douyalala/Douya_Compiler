@@ -7,20 +7,141 @@ decl @putarray(i32, *i32)
 decl @starttime()
 decl @stoptime()
 
-global @buf_0 = alloc [[i32, 100], 2], zeroinit
-
 fun @main(): i32 {
 %entry:
-@n_2 = alloc i32
-%ptr0 = getelemptr @buf_0, 0
-%ptr1 = getelemptr %ptr0, 0
-%0 = call @getarray(%ptr1)
-store %0, @n_2
-%1 = load @n_2
-call @merge_sort(0, %1)
-%2 = load @n_2
-%ptr2 = getelemptr @buf_0, 0
-%ptr3 = getelemptr %ptr2, 0
-call @putarray(%2, %ptr3)
-ret 0
+@a_2 = alloc i32
+store 1, @a_2
+@b_2 = alloc i32
+store 0, @b_2
+@c_2 = alloc i32
+store 4, @c_2
+@d_2 = alloc i32
+store 5, @d_2
+%0 = load @a_2
+%1 = eq %0, 1
+%2 = alloc i32
+br %1, %if_1, %else_1
+
+%if_1:
+store 1, %2
+jump %end_1
+
+%else_1:
+%3 = load @a_2
+%4 = eq %3, 2
+%5 = ne 0, %4
+store %5, %2
+jump %end_1
+
+%end_1:
+%6 = load %2
+br %6, %if_0, %end_0
+
+%if_0:
+jump %end_0
+
+%end_0:
+%7 = load @b_2
+%8 = eq %7, 0
+%9 = alloc i32
+br %8, %if_3, %else_3
+
+%if_3:
+store 1, %9
+jump %end_3
+
+%else_3:
+%10 = load @b_2
+%11 = eq %10, 1
+%12 = ne 0, %11
+store %12, %9
+jump %end_3
+
+%end_3:
+%13 = load %9
+br %13, %if_2, %else_2
+
+%if_2:
+%14 = load @d_2
+%15 = add %14, 1
+store %15, @d_2
+jump %end_2
+
+%else_2:
+jump %end_2
+
+%end_2:
+%16 = load @a_2
+%17 = alloc i32
+br %16, %if_5, %else_5
+
+%if_5:
+%18 = load @b_2
+%19 = ne 0, %18
+store %19, %17
+jump %end_5
+
+%else_5:
+store 0, %17
+jump %end_5
+
+%end_5:
+%20 = load %17
+%21 = alloc i32
+br %20, %if_6, %else_6
+
+%if_6:
+store 1, %21
+jump %end_6
+
+%else_6:
+%22 = load @c_2
+%23 = alloc i32
+br %22, %if_7, %else_7
+
+%if_7:
+%24 = load @d_2
+%25 = ne 0, %24
+store %25, %23
+jump %end_7
+
+%else_7:
+store 0, %23
+jump %end_7
+
+%end_7:
+%26 = load %23
+%27 = ne 0, %26
+store %27, %21
+jump %end_6
+
+%end_6:
+%28 = load %21
+br %28, %if_4, %end_4
+
+%if_4:
+%29 = load @d_2
+%30 = add %29, 1
+store %30, @d_2
+jump %end_4
+
+%end_4:
+%31 = load @d_2
+%32 = alloc i32
+br %31, %if_8, %else_8
+
+%if_8:
+store 1, %32
+jump %end_8
+
+%else_8:
+%33 = load @c_2
+%34 = eq 0, %33
+%35 = ne 0, %34
+store %35, %32
+jump %end_8
+
+%end_8:
+%36 = load %32
+ret %36
 }
